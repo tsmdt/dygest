@@ -1,15 +1,15 @@
-CREATE_SUMMARIES = """
+CREATE_SUMMARIES_BACKUP = """
 Perform the following tasks on the provided text:
 
 1. **Identify the top 2 most important topics** discussed in the text.
 2. **For each identified topic**, generate one summary of exactly 1 sentence of max. 25 words that effectively captures the key points related to that topic.
 
-**Return the results in the language of the Input Text as JSON. Do not add anything else and use this template:**
+**Return the results in the language of the Input Text as JSON. Do NOT add anything else and use this template without any alterations:**
 
 [
   {
     "topic": "Topic Name",
-    "summary": "A concise summary of 2-3 sentences related to the topic",
+    "summary": "A concise summary of 1 sentence related to the topic",
     "location": "First 5 words of the corresponding text chunk of the Input Text"
   },
   ...
@@ -18,15 +18,37 @@ Perform the following tasks on the provided text:
 **Input Text:**
 """
 
+
+CREATE_SUMMARIES = """
+Perform the following tasks on the provided text:
+
+1. **Identify the top 2 most important topics** discussed in the text.
+2. **For each identified topic**, generate a concise description using a short phrase or group of keywords that effectively captures the key points related to that topic.
+
+**Return the results in the language of the Input Text as JSON. Do NOT add anything else and use this template without any alterations:**
+
+[
+  {
+    "topic": "Topic Name",
+    "summary": "A concise phrase related to the topic",
+    "location": "First 5 words of the corresponding text chunk of the Input Text"
+  },
+  ...
+]
+
+**Input Text:**
+"""
+
+
 CLEAN_SUMMARIES = """
 Perform the following tasks on the provided list of summaries:
 
 **Identify overlapping summaries**: Analyze the summaries to find any that heavily overlapping in content or topic.
 **Remove duplicates**: Remove any overlapping summaries, ensuring that each topic is represented by only one summary.
 **Return a list of unique summaries**: Provide a new list containing only the unique summaries.
-**Do NOT change the remaining summaires in any way**: Keep them as they are!
+**Do NOT change the remaining summaries in any way**
 
-**Return the results in the language of the Input Summaries as JSON. Do not add anything else and use this template:**
+**Return the results in the language of the Input Summaries as **. **Do NOT add anything else** and use this template without any alterations:
 
 [
   {
@@ -38,25 +60,6 @@ Perform the following tasks on the provided list of summaries:
 ]
 
 **Input Summaries:**
-"""
-
-GET_ENTITIES = """
-Perform the following tasks on the provided text:
-
-1. **Extract the most relevant named entities** and **dates** from the text.
-2. **Categorize each entity or date (PERS, ORG, LOC, DATE)**.
-
-**Please return the results in the language of the Input Text in the following JSON format. Do not add anything else!**
-
-[
-  {
-    "entity": "Name of entity",
-    "category": "Category"
-  },
-  ...
-]
-
-**Input Text:**
 """
 
 
@@ -162,11 +165,44 @@ HTML_CONTENT = """
         width: auto;
         margin: 5px 2px;
     }
+
+    .additional-controls {
+        display: inline-block;
+        width: auto;
+        margin: 5px 2px;
+    }
     
     h5 {
         font-size: 22px;
     }
     
+    .metadata-header {
+        font-family: 'Courier New', Courier, monospace;
+        margin-left: 12px;
+        cursor: pointer; 
+        position: relative; 
+        white-space: pre-wrap;
+        overflow-wrap: break-word;
+    }
+
+    .metadata-content {
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 15px;
+        display: none;
+        margin-left: 12px; 
+        transition: max-height 0.3s ease, opacity 0.3s ease;
+        overflow: hidden;
+        opacity: 0;
+        max-height: 0;
+        margin-bottom: 10px;
+    }
+
+    .metadata.expanded .metadata-content {
+        display: block;
+        opacity: 1;
+        max-height: 500px; 
+    }
+
     .ner-entity {
         cursor: default;
     }
@@ -208,15 +244,12 @@ HTML_CONTENT = """
                     <button onclick="increaseFontSize()">AA</button>
                 </div>
                 
-                <!-- Other Buttons -->
-                <button id="toggle-highlighting" onclick="toggleHighlighting()">Hervorhebung</button>
-                <button id="toggle-timestamp" onclick="toggleTimestamp()">Zeitstempel</button>
-                <button id="toggle-source" onclick="toggleSource()">HTML anzeigen</button>
-                <button class="save" onclick="savePage()">Speichern</button>
+                <div class="additional-controls">
+                    <!-- Additional Buttons (Timestamps, NER, saving) -->
+                </div>
                 
             </div>
             <div class="summaries">
-                <h5 style="text-align: center;">Themenübersicht</h5>
                 <div id="summary-content" style="display: block">
                     <ol>
                         <!-- Summary items go here -->
@@ -225,9 +258,18 @@ HTML_CONTENT = """
             </div>
         </div>
         
-        <!-- Main Content -->
+        
         <div class="two-thirds column">
-            <h6 style="font-family: 'Courier New', Courier, monospace;  margin-left: 13px;"></h6>
+
+            <!-- Metadata -->
+            <div class="metadata">
+                <h6 class="metadata-header"></h6>
+                <div class="metadata-content">
+                    
+                </div>
+            </div>
+
+            <!-- Main Content -->
             <div class="content" contenteditable="true">
                 <p></p>
             </div>
@@ -366,6 +408,19 @@ HTML_CONTENT = """
 
         document.body.removeChild(link);
     }
+
+    document.addEventListener('DOMContentLoaded', function() {
+    // Select all metadata headers
+    const metadataHeaders = document.querySelectorAll('.metadata-header');
+
+    metadataHeaders.forEach(header => {
+        header.addEventListener('click', function() {
+            // Toggle the 'expanded' class on the parent .metadata div
+            const metadataDiv = this.parentElement;
+            metadataDiv.classList.toggle('expanded');
+            });
+        });
+    });
 </script>
 </body>
 </html>

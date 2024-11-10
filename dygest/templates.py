@@ -1,68 +1,3 @@
-CREATE_SUMMARIES_BACKUP = """
-Perform the following tasks on the provided text:
-
-1. **Identify the top 2 most important topics** discussed in the text.
-2. **For each identified topic**, generate one summary of exactly 1 sentence of max. 25 words that effectively captures the key points related to that topic.
-
-**Return the results in the language of the Input Text as JSON. Do NOT add anything else and use this template without any alterations:**
-
-[
-  {
-    "topic": "Topic Name",
-    "summary": "A concise summary of 1 sentence related to the topic",
-    "location": "First 5 words of the corresponding text chunk of the Input Text"
-  },
-  ...
-]
-
-**Input Text:**
-"""
-
-
-CREATE_SUMMARIES = """
-Perform the following tasks on the provided text:
-
-1. **Identify the top 2 most important topics** discussed in the text.
-2. **For each identified topic**, generate a concise description using a short phrase or group of keywords that effectively captures the key points related to that topic.
-
-**Return the results in the language of the Input Text as JSON. Do NOT add anything else and use this template without any alterations:**
-
-[
-  {
-    "topic": "Topic Name",
-    "summary": "A concise phrase related to the topic",
-    "location": "First 5 words of the corresponding text chunk of the Input Text"
-  },
-  ...
-]
-
-**Input Text:**
-"""
-
-
-CLEAN_SUMMARIES = """
-Perform the following tasks on the provided list of summaries:
-
-**Identify overlapping summaries**: Analyze the summaries to find any that heavily overlapping in content or topic.
-**Remove duplicates**: Remove any overlapping summaries, ensuring that each topic is represented by only one summary.
-**Return a list of unique summaries**: Provide a new list containing only the unique summaries.
-**Do NOT change the remaining summaries in any way**
-
-**Return the results in the language of the Input Summaries as **. **Do NOT add anything else** and use this template without any alterations:
-
-[
-  {
-    "topic": "Topic Name",
-    "summary": "A concise summary of exactly 1 sentence related to the topic",
-    "location": "First 5 words of the corresponding text chunk of the Input Text"
-  },
-  ...
-]
-
-**Input Summaries:**
-"""
-
-
 HTML_CONTENT = """
 <html>
 <head>
@@ -140,6 +75,39 @@ HTML_CONTENT = """
         border-bottom: 2px solid #117b5f;
     }
     
+    #back-to-top {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        display: none; 
+        z-index: 99; 
+        background-color: #03a9f4;
+        font-weight: 100;
+        color: white;
+        border: none;
+        padding: 10px 10px;
+        text-align: center;
+        text-decoration: none;
+        font-size: 15px;
+        cursor: pointer;
+        border-radius: 20px;
+        transition: 0.1s;
+        text-transform: none;
+        line-height: 1;
+        vertical-align: middle;
+        border-bottom: 2px solid #0074aa;
+    }
+
+    #back-to-top:hover {
+        background-color: #0289c7;
+        border-top: 2px solid #0078b0;
+        border-bottom: 2px solid #0078b0;
+    }
+
+    .content {
+        line-height: 1.75em;
+    }
+    
     .controls {
         padding: 10px;
         border-radius: 10px;
@@ -160,7 +128,7 @@ HTML_CONTENT = """
         min-height: 100px; 
     }
     
-    .font-size-controls button {
+    .document-controls button {
         display: inline-block;
         width: auto;
         margin: 5px 2px;
@@ -228,6 +196,32 @@ HTML_CONTENT = """
         font-size: 16px;
         cursor: default;
     }
+
+    ol ul {
+        list-style: none;
+        font-size: 95%;
+        line-break: loose;
+        padding: 0;
+        margin-top: 5px;
+        margin-bottom: 5px;
+        margin-left: 14px;
+    }
+    
+    ul li {
+        margin: 0; 
+        padding: 0; 
+        position: relative;
+        padding-left: 10px; 
+    }
+
+    ul li::before {
+        content: "•";
+        position: absolute;
+        left: 0; 
+        margin-right: 5px;
+        color: black;
+        top: 0; 
+    }
 </style>
 </head>
 <body>
@@ -239,7 +233,7 @@ HTML_CONTENT = """
             <div class="controls">
             
                 <!-- Control Font-Size -->
-                <div class="font-size-controls">
+                <div class="document-controls">
                     <button onclick="decreaseFontSize()">aa</button>
                     <button onclick="increaseFontSize()">AA</button>
                 </div>
@@ -276,6 +270,7 @@ HTML_CONTENT = """
         </div>
     </div>
 </div>
+<button onclick="scrollToTop()" id="back-to-top">Top</button>
 <script>
     // Variables to keep track of the state
     var isTimestampVisible = true;
@@ -421,6 +416,22 @@ HTML_CONTENT = """
             });
         });
     });
+
+    // Back to Top Button
+    window.onscroll = function() { scrollFunction() };
+
+    function scrollFunction() {
+        var backToTopButton = document.getElementById("back-to-top");
+        if (document.body.scrollTop > 500 || document.documentElement.scrollTop > 500) {
+            backToTopButton.style.display = "block";
+        } else {
+            backToTopButton.style.display = "none";
+        }
+    }
+
+    function scrollToTop() {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
 </script>
 </body>
 </html>

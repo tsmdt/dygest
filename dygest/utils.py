@@ -36,9 +36,9 @@ def load_txt_file(file_path: str) -> str:
 def remove_hyphens(text: str) -> str:
     return re.sub(r'[=-⸗–]\n', '', text)
 
-def chunk_text(text: str, max_tokens: int = 1200) -> tuple[list[str], int]:
+def chunk_text(text: str, max_tokens: int = 4000) -> tuple[list[str], int]:
     """
-    Chunks string by max_tokens and returns text_chunks and overall token count.
+    Chunks string by max_tokens and returns text_chunks and token count.
     """
     tokenizer = tiktoken.get_encoding("gpt2") 
     
@@ -107,15 +107,16 @@ def validate_and_fix_json(json_string: str) -> Optional[dict]:
     
     if is_valid_json(fixed_json_str):
         print("... JSON fixed successfully.\n")
+        print(f'\n{json_string}\n')
         return json.loads(fixed_json_str)
     else:
         print("... Failed to fix JSON.")
-        print(json_string)
+        print(f'\n{json_string}\n')
         return None
 
 def validate_summaries(llm_result):
     """
-    Validate a collection of LLM summaries if it is correct JSON.
+    Validate a collection of LLM summaries for correct JSON format.
     """
     try:
         summaries = validate_and_fix_json(llm_result)
@@ -125,7 +126,7 @@ def validate_summaries(llm_result):
     return summaries
 
 def print_entities(entities: list[dict]) -> None:
-    [print(f"{item['entity']} → {item['category']}") for item in entities]
+    [print(f"{entity['text']} → {entity['ner_tag']}") for entity in entities]
 
 def print_summaries(summaries: list[dict]) -> None:
     for idx, item in enumerate(summaries):

@@ -12,6 +12,11 @@ from dygest.llms import LLMServiceBase
 app = typer.Typer()
 
 
+class MODE(Enum):
+    summarize = 'sum'
+    create_toc = 'toc'
+
+
 class LLMService(Enum):
     OLLAMA = 'ollama'
     OPENAI = 'openai'
@@ -45,6 +50,7 @@ def run(
     llm_service: LLMServiceBase = None,
     model: str = None,
     temperature: float = 0.1,
+    mode: str = None,
     ner_tagger: Classifier = None,
     precise: bool = False,
     max_tokens: int = 1000, 
@@ -83,6 +89,9 @@ def run(
     # Get filename
     filename = filepath.stem
 
+    # Create output_filepath
+    output_filepath = Path(f'{output_dir.joinpath(filename)}')
+
     # Chunk file
     text = utils.load_txt_file(filepath)
     chunks, token_count = utils.chunk_text(text, max_tokens=max_tokens)
@@ -97,58 +106,59 @@ def run(
             precise=precise
             )
     
-    # Retrieve entities and summaries
-    all_entities = []
-    all_summaries = []
+    # Run Named Entity Recognition (NER)
+    entities = ner_utils.get_flair_entities(text, ner_tagger)
+    all_entities = ner_utils.update_entity_positions(entities, text)
 
+    if verbose:
+        print(f"\n\nENTITIES FOR DOC:\n")
+        utils.print_entities(all_entities)
+
+    # Retrieve LLM summaries for text chunks
+    all_summaries = []
     for idx, chunk in enumerate(tqdm(chunks)):
-        entities = ner_utils.get_flair_entities(chunk, ner_tagger)
-        all_entities.extend(entities)
-        
-        # Retrieve Summaries
         result = llm_service.prompt(
             template='summarize',
             text_input=chunk,
             model=model,
             temperature=temperature)
+        
         summaries = utils.validate_summaries(result)
         all_summaries.extend(summaries)
         
         if verbose:
-            print(f"\n\nENTITIES IN CHUNK {idx + 1}:\n")
-            utils.print_entities(entities)
-            print()
             print(f"SUMMARIES FOR CHUNK {idx + 1}:\n")
             utils.print_summaries(summaries)
             print("===============\n")
     
-    # Remove duplicate entities        
-    all_entities = ner_utils.remove_duplicate_entities(all_entities)
-    
-    # Remove duplicate summaries
+    # Post-Processing: Clean summaries or create TOC
     temp_summaries = llm_service.prompt(
-            template='clean_summaries',
-            text_input=all_summaries,
-            model=model,
-            temperature=temperature)
+        template=mode, # Sets the post-processing mode
+        text_input=all_summaries,
+        model=model,
+        temperature=temperature)
     all_summaries = utils.validate_summaries(temp_summaries)
+
+    # print(temp_summaries)
     
     if verbose:
+        print(f"COMPLETE SUMMARIES FOR DOC:\n")
         utils.print_summaries(all_summaries)
-    
+
     # Write Output
-    html_content = output_utils.create_html(
-        filename=filename, 
-        text=text, 
-        summaries=all_summaries, 
+    html_writer = output_utils.HTMLWriter(
+        filename=filename,
+        output_filepath=output_filepath.with_suffix('.html'),
+        text=text,
         named_entities=all_entities,
+        summaries=all_summaries,
         language=language,
         llm_service=llm_service,
         model=model,
+        mode=mode,
         token_count=token_count
-        )
-    
-    output_utils.save_html(html_content, filepath=f'{output_dir.joinpath(filename).with_suffix('.html')}')
+    )
+    html_writer.write_html()
 
 @app.command(no_args_is_help=True)
 def main(
@@ -156,7 +166,7 @@ def main(
         ...,
         "--files",
         "-f",
-        help="Path to the input folder or text file."
+        help="Path to the input folder or .txt file."
     ),
     output_dir: str = typer.Option(
         Path("./output"),
@@ -189,6 +199,12 @@ def main(
         "-t",
         help='Temperature of LLM.',
     ),
+    dygest_mode: MODE = typer.Option(
+        MODE.create_toc.value,
+        "--dygest",
+        '-d',
+        help='Create summaries or a table of contents (TOC).',
+    ),
     max_tokens: int = typer.Option(
         1000,
         "--max_tokens", 
@@ -218,7 +234,13 @@ def main(
         help="Enable verbose output.",
     )):
     """
-    Get insights in your content with DYGEST 🌞 
+    🌞 DYGEST: Document Insights Generator 🌞 
+
+    -----------------------------------------
+    
+    DYGEST is a designed to extract meaningful insights from your text documents.
+    It can generate summaries, create tables of contents (TOC), and perform Named Entity Recognition (NER)
+    to identify and categorize key information within your documents.
     """
     # Check for or create output_dir
     output_dir = Path(output_dir)    
@@ -248,6 +270,9 @@ def main(
     else:
         tagger = None
 
+    # Map mode to prompt templates
+    mode = {"sum": "clean_summaries", "toc": "create_toc"}[dygest_mode.value]
+
     # Run processing
     for file in files_to_process:
         run(
@@ -256,6 +281,7 @@ def main(
             llm_service=llm_service_instance,
             model=model,
             temperature=temperature,
+            mode=mode,
             ner_tagger=tagger,
             precise=precise,
             max_tokens=max_tokens,

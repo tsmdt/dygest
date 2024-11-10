@@ -9,7 +9,7 @@
 - **HTML Editor**: By default **dygest** will create a `.html` file that can be viewed in standard browsers and combines summaries, TOC and NER for your text. It features a text editor for you to make further changes.
 
 <p align="center">
-  <img width="80%" alt="dygest_html" src="https://github.com/user-attachments/assets/6de07c30-0125-4c1a-93c2-e2ef81047a2d">
+  <img width="90%" alt="dygest_html" src="https://github.com/user-attachments/assets/6de07c30-0125-4c1a-93c2-e2ef81047a2d">
 </p>
 
 ## Requirements

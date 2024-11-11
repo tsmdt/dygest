@@ -106,9 +106,12 @@ class OllamaService(LLMServiceBase):
             raise ValueError(f"The URL '{self.host}' is not valid.")
         
         if not self._is_server_available():
-            raise ConnectionError(f"Cannot connect to the Ollama server at '{self.host}'.")
+            raise ConnectionError(
+                f"Cannot connect to the Ollama server at '{self.host}': \
+                Plase check if Ollama is running and if the host URL is correct."
+                )
         else:
-            print(f"Successfully connected to Ollama server at '{self.host}'.")
+            print(f"Successfully connected to Ollama server at '{self.host}'")
 
     def _is_url_valid(self, url):
         parsed = urlparse(url)

@@ -18,6 +18,8 @@ setup(
         'tiktoken==0.8.0',
         'beautifulsoup4==4.12.3',
         'groq==0.11.0',
+        'openai==1.54.3',
+        'ollama==0.3.3',
         'flair==0.14.0',
         'tqdm==4.66.6',
         'langdetect==1.0.9',

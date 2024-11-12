@@ -6,10 +6,10 @@ with open("README.md", "r") as fh:
 setup(
     name="dygest",
     author="Thomas Schmidt",
-    version='0.1',
+    version='0.2.0',
     packages=find_packages(),
     license="MIT",
-    description="Digest text file with NER and LLMs",
+    description="DYGEST: Document Insights Generator",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/tsmdt/dygest",

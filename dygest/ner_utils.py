@@ -1,6 +1,8 @@
 import re
 import copy
 import time
+
+from tqdm import tqdm
 from flair.nn import Classifier
 from flair.splitter import SegtokSentenceSplitter
 from collections import defaultdict
@@ -45,7 +47,8 @@ def get_flair_entities(text: str, tagger: Classifier) -> list:
     sentences = splitter.split(text)
 
     # Predict entities
-    tagger.predict(sentences)
+    print(f'... Starting NER task')
+    tagger.predict(sentences, verbose=True)
 
     entities = []
     for sentence in sentences:
@@ -95,20 +98,20 @@ def update_entity_positions(
         if verbose:
             # Debugging Output
             print(
-                f"Processing '{text}': {num_matches} matches found, " 
-                f"{num_entities} entities to update."
+                f"... Processing '{text}': {num_matches} matches found, " 
+                f"... {num_entities} entities to update."
                 )
             
             # Check for mismatches in counts
             if num_matches < num_entities:
                 print(
-                    f"Warning: Not enough matches for '{text}'. "
-                    f"{num_entities - num_matches} entities will not be updated."
+                    f"... Warning: Not enough matches for '{text}'. "
+                    f"... {num_entities - num_matches} entities will not be updated."
                     )
             elif num_matches > num_entities:
                 print(
-                    f"Warning: More matches than entities for '{text}'. "
-                    f"{num_matches - num_entities} extra matches will be ignored."
+                    f"... Warning: More matches than entities for '{text}'. "
+                    f"... {num_matches - num_entities} extra matches will be ignored."
                     )
             
         # Assign match positions to entities
@@ -119,15 +122,15 @@ def update_entity_positions(
                 entity['end'] = match.end()
                 if verbose:
                     print(
-                        f"Updated entity {i+1}: start={match.start()}, "
-                        f"end={match.end()}"
+                        f"... Updated entity {i+1}: start={match.start()}, "
+                        f"... end={match.end()}"
                         )
             else:
                 # Handle entities without corresponding matches
                 if verbose:
                     print(
-                        f"Entity {i+1} with text '{text}' has no corresponding "
-                        f"match in 'doc'."
+                        f"... Entity {i+1} with text '{text}' has no corresponding "
+                        f"... match in 'doc'."
                         )
     
     return temp_entities

@@ -28,7 +28,8 @@ class HTMLWriter:
             llm_service: str,
             model: str,
             mode: str,
-            token_count: int
+            token_count: int,
+            export_metadata: bool
             ):
         self.filename = filename
         self.output_filepath = output_filepath
@@ -40,6 +41,7 @@ class HTMLWriter:
         self.model = model
         self.mode = mode
         self.token_count = token_count
+        self.export_metadata = export_metadata
         # HTML template
         self.soup = BeautifulSoup(templates.HTML_CONTENT, "html.parser")
         self.has_speaker = False
@@ -72,36 +74,37 @@ class HTMLWriter:
                 h6_tag.string = f'{self.filename}'
             
             # Add model and LLM service
-            div_metadata_content = self.soup.find('div', class_='metadata-content')
-            if div_metadata_content:
-                llm_service_tag = self.soup.new_tag('span')
-                llm_service_tag.string = f"Created with {self.model} ({self.llm_service.name})"
-                div_metadata_content.append(llm_service_tag)
-                
-                br_tag = self.soup.new_tag('br')
-                div_metadata_content.append(br_tag)
+            if self.export_metadata:
+                div_metadata_content = self.soup.find('div', class_='metadata-content')
+                if div_metadata_content:
+                    llm_service_tag = self.soup.new_tag('span')
+                    llm_service_tag.string = f"Created with {self.model} ({self.llm_service.name})"
+                    div_metadata_content.append(llm_service_tag)
+                    
+                    br_tag = self.soup.new_tag('br')
+                    div_metadata_content.append(br_tag)
 
-                processing_timestamp_tag = self.soup.new_tag('span')
-                processing_timestamp_tag.string = f"Date: {str(
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    )}"
-                div_metadata_content.append(processing_timestamp_tag)
+                    processing_timestamp_tag = self.soup.new_tag('span')
+                    processing_timestamp_tag.string = f"Date: {str(
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        )}"
+                    div_metadata_content.append(processing_timestamp_tag)
 
-                br_tag = self.soup.new_tag('br')
-                div_metadata_content.append(br_tag)
+                    br_tag = self.soup.new_tag('br')
+                    div_metadata_content.append(br_tag)
 
-                token_count_tag = self.soup.new_tag('span')
-                token_count_tag.string = f"Tokens: {self.token_count:,.0f}".replace(',', '.')
-                div_metadata_content.append(token_count_tag)
+                    token_count_tag = self.soup.new_tag('span')
+                    token_count_tag.string = f"Tokens: {self.token_count:,.0f}".replace(',', '.')
+                    div_metadata_content.append(token_count_tag)
 
-                br_tag = self.soup.new_tag('br')
-                div_metadata_content.append(br_tag)
+                    br_tag = self.soup.new_tag('br')
+                    div_metadata_content.append(br_tag)
 
-                entity_count_tag = self.soup.new_tag('span')
-                ner_count = Counter([x['ner_tag'] for x in self.named_entities])
-                ner_string = f"{len(self.named_entities)} {list(ner_count.items())}"
-                entity_count_tag.string = f"Entities: {ner_string}"
-                div_metadata_content.append(entity_count_tag)
+                    entity_count_tag = self.soup.new_tag('span')
+                    ner_count = Counter([x['ner_tag'] for x in self.named_entities])
+                    ner_string = f"{len(self.named_entities)} {list(ner_count.items())}"
+                    entity_count_tag.string = f"Entities: {ner_string}"
+                    div_metadata_content.append(entity_count_tag)
 
 
     def add_controls(self):
@@ -398,5 +401,5 @@ class HTMLWriter:
     def save_html(self):
         with open(self.output_filepath, 'w', encoding='utf-8') as fout:
             fout.write(str(self.soup))
-        print(f"... Saved {self.output_filepath}.")
+        print(f"🌞 Saved {self.output_filepath}.")
     

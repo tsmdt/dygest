@@ -85,7 +85,7 @@ class HTMLWriter:
                     div_metadata_content.append(br_tag)
 
                     processing_timestamp_tag = self.soup.new_tag('span')
-                    processing_timestamp_tag.string = f"Date: {str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}"
+                    processing_timestamp_tag.string = f"Date: {str(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}"
                     div_metadata_content.append(processing_timestamp_tag)
 
                     br_tag = self.soup.new_tag('br')

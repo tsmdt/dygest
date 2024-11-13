@@ -99,7 +99,7 @@ class SummaryProcessor:
             if similar_topics:
                 print("... Similar Topics Identified:")
                 for pair in similar_topics:
-                    print(f"'... {pair['topic_1']}' <--> '{pair['topic_2']}' with similarity score of {pair['similarity_score']:.4f}")
+                    print(f"... '{pair['topic_1']}' <--> '{pair['topic_2']}' with similarity score of {pair['similarity_score']:.4f}")
             else:
                 print("... No similar topics found above the threshold.")
 

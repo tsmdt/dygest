@@ -16,6 +16,10 @@ CATEGORY_COLORS = {
     'MISC': '#ff8222',
 }
 
+def get_translation(key, language_code, default_language='en'):
+    translations = UI_TRANSLATIONS.get(key, {})
+    return translations.get(language_code, translations.get(default_language, ''))
+
 
 class HTMLWriter:
     def __init__(self,
@@ -118,9 +122,10 @@ class HTMLWriter:
                         "id": "toggle-highlighting",
                         "onclick": "toggleHighlighting()"
                     })
-                button_NER_highlighting.string = UI_TRANSLATIONS.get(
-                    'button_NER_highlighting'
-                    ).get(self.language, 'en')
+                button_NER_highlighting.string = get_translation(
+                    key='button_NER_highlighting',
+                    language_code=self.language
+                )
                 div_additional_controls.append(button_NER_highlighting)
 
             # Add Speaker / Timestamp Button 
@@ -131,9 +136,10 @@ class HTMLWriter:
                         "id": "toggle-timestamp",
                         "onclick": "toggleTimestamp()"
                     })
-                button_timestamps.string = UI_TRANSLATIONS.get(
-                    'button_timestamps'
-                    ).get(self.language, 'en')
+                button_timestamps.string = get_translation(
+                    key='button_timestamps',
+                    language_code=self.language
+                )
                 div_additional_controls.append(button_timestamps)
 
             # Add button for showing HTML Code
@@ -143,9 +149,10 @@ class HTMLWriter:
                     'id': 'toggle-source',
                     'onclick': 'toggleSource()'
                 })
-            button_show_html.string = UI_TRANSLATIONS.get(
-                'button_show_HTML'
-                ).get(self.language, 'en')
+            button_show_html.string = get_translation(
+                key='button_show_HTML',
+                language_code=self.language
+                )
             div_additional_controls.append(button_show_html)
 
         # Add button for saving the edited HTML
@@ -156,9 +163,10 @@ class HTMLWriter:
                 'class': 'save',
                 'onclick': 'savePage()'
             })
-        button_save.string = UI_TRANSLATIONS.get(
-            'button_save'
-            ).get(self.language, 'en')
+        button_save.string = get_translation(
+                key='button_save',
+                language_code=self.language
+            )
         div_document_controls.append(button_save)
 
     def add_main_content(self):
@@ -173,9 +181,10 @@ class HTMLWriter:
                 attrs={
                     'style': 'text-align: center;'
                 })
-            h5_tag.string = UI_TRANSLATIONS.get(
-                'heading_topics'
-                ).get(self.language, 'en')
+            h5_tag.string = get_translation(
+                key='heading_topics',
+                language_code=self.language
+                )
             div_summaries.insert_before(h5_tag)
 
         # TOC
@@ -231,11 +240,13 @@ class HTMLWriter:
                 ol_tag.append(li_tag)
         else:
             print(f'... Wrong prompt template: {self.mode}')
-                
-        # Prepare to process the text
+        
+        ### Content Processing ###     
+           
         events = []
         
-        ### 1. Collect NER events
+        ### 1. Collect NER events ###
+        
         for entity in self.named_entities:
             entity_start = entity['start']
             entity_end = entity['end']
@@ -249,29 +260,21 @@ class HTMLWriter:
             events.append((entity_start, 'start_entity', entity_ner_tag))
             events.append((entity_end, 'end_entity', None))
         
-        ### 2. Collect anchor tag events 
-        # TOC
-        if self.mode == 'create_toc':
-            for item in self.summaries:
-                for topic in item['topics']:
-                    location = topic.get('location')
-                    if location:
-                        for match in re.finditer(re.escape(location), self.text):
-                            start, _ = match.start(), match.end()
-                            anchor_id = f"location_{location.replace(' ', '_')}"
-                            events.append((start, 'insert_anchor', anchor_id))
-        # Summaries
-        else:
-            for item in self.summaries:
-                location = item.get('location')
+        ### 2. Collect anchor tag events for TOC ###
+        
+        for item in self.summaries:
+            for topic in item['topics']:
+                location = topic.get('location')
                 if location:
                     for match in re.finditer(re.escape(location), self.text):
                         start, _ = match.start(), match.end()
                         anchor_id = f"location_{location.replace(' ', '_')}"
                         events.append((start, 'insert_anchor', anchor_id))
         
-        ### 3. Match timestamp / speaker patterns of this type: [00:00:06.743] [SPEAKER_09]
+        ### 3. Match timestamp / speaker patterns of this type: [00:00:06.743] [SPEAKER_09] ###
+        
         pattern = r'\[\d{2}:\d{2}:\d{2}\.\d{3}\] \[SPEAKER_\d+\]|\[SPEAKER_\d+\]'
+        
         for match in re.finditer(pattern, self.text):
             start, end = match.start(), match.end()
             events.append((start, 'insert_linebreak', None))
@@ -288,6 +291,7 @@ class HTMLWriter:
             'start_speaker': 4,
             'start_entity': 5
         }
+
         events.sort(key=lambda x: (x[0], event_order[x[1]]))
         
         # Build the content with paragraphs
@@ -307,19 +311,34 @@ class HTMLWriter:
             position = event_position
             
             if event_type == 'start_entity':
-                # Start a new span for the entity
-                span_tag = self.soup.new_tag(
-                    "span", 
+                # Save the current parent to the stack
+                spans_stack.append(current_parent)
+
+                # Create the outer span for the entity
+                outer_span_tag = self.soup.new_tag(
+                    "span",
                     attrs={
                         "class": "ner-entity",
                         "data-color": CATEGORY_COLORS.get(data, ''),
-                        "alt": data,
                         "style": f"background-color: {CATEGORY_COLORS.get(data, '')};",
-                        "title": data
+                        "title": data,
+                        "contenteditable": False
                     })
-                current_parent.append(span_tag)
-                spans_stack.append(span_tag)
-                current_parent = span_tag
+
+                # Create the inner span that will hold the text
+                inner_span_tag = self.soup.new_tag(
+                    "span",
+                    attrs={
+                        "class": "edits",
+                        "tabindex": 0,
+                        "contenteditable": True
+                    })
+
+                outer_span_tag.append(inner_span_tag)
+                current_parent.append(outer_span_tag)
+
+                # Set the current parent to the inner span
+                current_parent = inner_span_tag
                 
             elif event_type == 'end_entity':
                 # Close the current entity span
@@ -363,14 +382,26 @@ class HTMLWriter:
                 current_parent = p_tag
             
             elif event_type == 'start_speaker':
-                span_tag = self.soup.new_tag(
+                spans_stack.append(current_parent)
+                
+                outer_span_tag = self.soup.new_tag(
                     "span", 
                     attrs={
-                        "class": "timestamp"
+                        "class": "timestamp",
+                        "contenteditable": False
                     })
-                current_parent.append(span_tag)
-                spans_stack.append(span_tag)
-                current_parent = span_tag
+                
+                inner_span_tag = self.soup.new_tag(
+                    "span",
+                    attrs={
+                        "class": "edits",
+                        "tabindex": 0,
+                        "contenteditable": True
+                    })
+                
+                outer_span_tag.append(inner_span_tag)
+                current_parent.append(outer_span_tag)
+                current_parent = inner_span_tag
             
             elif event_type == 'end_speaker':
                 # Close the speaker span
@@ -393,11 +424,11 @@ class HTMLWriter:
         old_p_tag.decompose()
 
         # Ensure readability of HTML
-        self.soup.prettify()
+        self.soup.prettify(formatter='html')
 
     
     def save_html(self):
         with open(self.output_filepath, 'w', encoding='utf-8') as fout:
             fout.write(str(self.soup))
-        print(f"🌞 Saved {self.output_filepath}.")
+        print(f"... 🌞 Saved {self.output_filepath}.")
     

@@ -11,7 +11,7 @@ HTML_CONTENT = """
         font-size: 18px; 
         margin: 20px;
     }
-    
+
     a {
         color: #3d64bb; 
         text-decoration: none;
@@ -21,7 +21,7 @@ HTML_CONTENT = """
         color: #296af6; 
         text-decoration: underline; 
     }
-    
+
     .anchor {
         text-decoration: underline;
     }
@@ -62,7 +62,7 @@ HTML_CONTENT = """
         background-color: #03a9f4;
         color: white;
     }
-    
+
     button.save {
         background-color: #1bc89a;
         border-bottom: 2px solid #14916f;
@@ -74,7 +74,7 @@ HTML_CONTENT = """
         border-top: 2px solid #117b5f;
         border-bottom: 2px solid #117b5f;
     }
-    
+
     #back-to-top {
         position: fixed;
         bottom: 20px;
@@ -107,20 +107,20 @@ HTML_CONTENT = """
     .content {
         line-height: 1.75em;
     }
-    
+
     .controls {
         padding: 10px;
         border-radius: 10px;
         margin-bottom: 10px;
         text-align: center;
     }
-    
+
     div[contenteditable="true"] {
         border-radius: 10px;
         padding: 10px;
         min-height: 100px; 
     }
-    
+
     div[contenteditable="true"]:focus {
         background-color: #f6f6f6;
         border-radius: 10px;
@@ -128,6 +128,19 @@ HTML_CONTENT = """
         min-height: 100px; 
     }
     
+    .edits {
+        border: 0;
+    }
+
+    .edits:focus {
+        border: 3px solid deeppink;
+        background-color: rgb(255, 215, 215);
+        padding: 4px;
+        color: black;
+        border-radius: 10px;
+        outline: none; 
+    }
+
     .document-controls button {
         display: inline-block;
         width: auto;
@@ -139,11 +152,11 @@ HTML_CONTENT = """
         width: auto;
         margin: 5px 2px;
     }
-    
+
     h5 {
         font-size: 22px;
     }
-    
+
     .metadata-header {
         font-family: 'Courier New', Courier, monospace;
         margin-left: 12px;
@@ -174,7 +187,7 @@ HTML_CONTENT = """
     .ner-entity {
         cursor: default;
     }
-    
+
     .sidebar {
         border-radius: 10px;
     }
@@ -189,7 +202,7 @@ HTML_CONTENT = """
     #summary-content {
         font-size: 15px;
     }
-    
+
     .timestamp {
         color: #f41ad7; 
         font-family: 'Courier New', Courier, monospace; 
@@ -206,7 +219,7 @@ HTML_CONTENT = """
         margin-bottom: 5px;
         margin-left: 14px;
     }
-    
+
     ul li {
         margin: 0; 
         padding: 0; 

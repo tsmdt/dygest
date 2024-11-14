@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 from dygest import prompts
 
 
-### Prompts ### 
+### Prompts ###
 
 PROMPTS = {
   'summarize': prompts.CREATE_SUMMARIES,
@@ -25,7 +25,7 @@ PROMPTS = {
 }
 
 
-### LLMs ### 
+### LLMs ###
 
 class LLMServiceBase(metaclass=abc.ABCMeta):
     def __init__(self):

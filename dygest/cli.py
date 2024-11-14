@@ -1,4 +1,5 @@
 import typer
+from typing import Optional
 from enum import Enum
 from pathlib import Path
 
@@ -31,11 +32,11 @@ def main(
         "-f",
         help="Path to the input folder or .txt file."
     ),
-    output_dir: str = typer.Option(
-        "./output",
+    output_dir: Optional[str] = typer.Option(
+        None,
         "--output_dir",
         "-o",
-        help="Folder where digests should be saved.",
+        help="If not provided, outputs will be saved in the input folder.",
     ),
     llm_service: LLMService = typer.Option(
         LLMService.GROQ.value,
@@ -47,7 +48,7 @@ def main(
         None,
         "--llm_model",
         "-m",
-        help="LLM model name.",
+        help="LLM model name. Defaults to 'llama-3.1-70b-versatile' (Groq), 'gpt-4o-mini' (OpenAI) or 'llama3.1' (Ollama).",
     ),
     temperature: float = typer.Option(
         0.1,
@@ -65,7 +66,7 @@ def main(
         None,
         "--embedding_model",
         "-e",
-        help="Embedding model name.",
+        help="Embedding model name. Defaults to 'text-embedding-3-small' (OpenAI) or 'nomic-embed-text' (Ollama).",
     ),
     chunk_size: int = typer.Option(
         1000,
@@ -73,10 +74,17 @@ def main(
         "-c",
         help="Maximum number of tokens per chunk."
     ),
+    sim_threshold: float = typer.Option(
+        0.85,
+        "--sim_threshold",
+        "-sim",
+        help="Similarity threshold for removing duplicate summaries."
+    ),
     ner: bool = typer.Option(
         True,
         "--ner",
         help="Enable Named Entity Recognition (NER). Defaults to True.",
+        is_flag=True
     ),
     language: NERlanguages = typer.Option(
         NERlanguages.AUTO,
@@ -89,24 +97,26 @@ def main(
         "--precise",
         "-p",
         help="Enable precise mode for NER. Defaults to fast mode.",
+        is_flag=True
     ),
     verbose: bool = typer.Option(
         False,
         "--verbose",
         "-v",
         help="Enable verbose output.",
+        is_flag=True
     ),
     export_metadata: bool = typer.Option(
-        False,
+        True,
         "--export_metadata",
         "-meta",
-        help="Export processing metadata to output file(s).",
+        help="Enable exporting metadata to output file(s).",
+        is_flag=True,
     )
 ):
     """
     🌞 DYGEST: Document Insights Generator 🌞
     """
-    # Lazy imports
     from tqdm import tqdm
     from langdetect import detect, DetectorFactory
     from dygest import llms, utils, output_utils, ner_utils
@@ -123,6 +133,7 @@ def main(
             embedding_model: str = None,
             temperature: float = 0.1,
             chunk_size: int = 1000,
+            sim_threshold: float = 0.8,
             ner: bool = True,
             language: NERlanguages = NERlanguages.AUTO,
             precise: bool = False,
@@ -130,7 +141,7 @@ def main(
             export_metadata: bool = False
         ):
             self.filepath = filepath
-            self.output_dir = Path(output_dir)
+            self.output_dir = output_dir
             self.llm_service = llm_service
             self.llm_model = llm_model
             self.llm_client = None
@@ -141,6 +152,7 @@ def main(
             self.token_count = None
             self.temperature = temperature
             self.chunk_size = chunk_size
+            self.sim_threshold = sim_threshold
             self.ner = ner
             self.language = language.value 
             self.precise = precise
@@ -261,34 +273,10 @@ def main(
                 embedding_service=self.embedding_client,
                 embedding_model=self.embedding_model,
                 key='topic',
-                threshold=0.85,
+                threshold=self.sim_threshold,
                 verbose=self.verbose
             )
             filtered_summaries = sp.get_filtered_summaries()
-
-            # Create TOC
-            # For larger documents chunk the summaries first
-            # if self.token_count > 16000:
-            #     chunked_summaries = utils.chunk_summaries(filtered_summaries)
-            #     processed_summaries = []
-            #     for summary in chunked_summaries:
-            #         temp_summaries = self.llm_client.prompt(
-            #             template='create_toc',
-            #             text_input=summary,
-            #             model=self.llm_model,
-            #             temperature=self.temperature
-            #         )
-
-            #         temp_summaries = utils.validate_summaries(temp_summaries)
-            #         processed_summaries.extend(temp_summaries)
-            # else:
-            #     temp_summaries = self.llm_client.prompt(
-            #         template='create_toc',
-            #         text_input=filtered_summaries,
-            #         model=self.llm_model,
-            #         temperature=self.temperature
-            #     )
-            #     processed_summaries = utils.validate_summaries(temp_summaries)
 
             print(f'... Creating TOC')
             toc_summaries = self.llm_client.prompt(
@@ -315,15 +303,31 @@ def main(
             )
             html_writer.write_html()
 
+    # Pass input_filepath dir as output if None was provided
+    input_path = Path(filepath)
+    
+    if not input_path.exists():
+        typer.echo(f"Error: The path '{filepath}' does not exist.", err=True)
+        raise typer.Exit(code=1)
+
+    if output_dir is None:
+        if input_path.is_dir():
+            resolved_output_dir = input_path
+        else:
+            resolved_output_dir = input_path.parent
+    else:
+        resolved_output_dir = Path(output_dir)
+
     processor = DygestProcessor(
         filepath=filepath,
-        output_dir=output_dir,
+        output_dir=resolved_output_dir,
         llm_service=LLMService(llm_service),
         llm_model=llm_model,
         embedding_service=EmbeddingService(embedding_service),
         embedding_model=embedding_model,
         temperature=temperature,
         chunk_size=chunk_size,
+        sim_threshold=sim_threshold,
         ner=ner,
         language=language,
         precise=precise,

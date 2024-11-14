@@ -126,7 +126,7 @@ def load_filepath(filepath: str) -> list[Path]:
         print("... Please provide a valid filepath.")
         return
     elif filepath.is_dir():
-        files_to_process = list(filepath.glob("*.txt"))
+        files_to_process = list(filepath.rglob("*.txt"))
         if not files_to_process:
             print("... No .txt files found in the directory.")
             return

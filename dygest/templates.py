@@ -365,7 +365,7 @@ HTML_CONTENT = """
     }
 
     function changeFontSize(delta) {
-        let elements = document.querySelectorAll('.content, .content *');
+        let elements = document.querySelectorAll('.content');
         elements.forEach(function(element) {
             let style = window.getComputedStyle(element).getPropertyValue('font-size');
             let currentSize = parseFloat(style); 

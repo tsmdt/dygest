@@ -52,31 +52,6 @@ class LLMServiceBase(metaclass=abc.ABCMeta):
         except Exception as e:
             print(f"... An unexpected error occurred: {e}")
             raise e
-    
-    # def prompt(self, template, text_input, model, temperature):
-    #     template_text = PROMPTS.get(template, '')
-    #     try:
-    #         return self._call_api(template_text, text_input, model, temperature)
-    #     except AuthenticationError as e:
-    #         print(
-    #             f"... Authentication Error: Please make soure that your API key "
-    #             f"... is stored in your shell environment. ('export OPENAI_API_KEY=sk-proj...') "
-    #             )
-    #         raise e
-    #     except RateLimitError as e:
-    #         print("... Rate Limit Exceeded: Please wait and try again later.")
-    #         raise e
-    #     except APIConnectionError as e:
-    #         print("... Connection Error: Failed to connect to API.")
-    #         raise e
-    #     except Exception as e:
-    #         print(f"... An unexpected error occurred: {e}")
-    #         raise e
-        
-    # def list_models(self):
-    #     try:
-    #         return self._api_list_models()
-    #     except :
 
     def prompt(self, template, text_input, model, temperature):
         template_text = PROMPTS.get(template, '')
@@ -94,10 +69,6 @@ class LLMServiceBase(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def _api_list_models(self):
         pass
-
-    # @abc.abstractmethod
-    # def _call_api(self, template_text, text_input, model, temperature):
-    #     pass
 
 
 class OpenAIService(LLMServiceBase):
@@ -125,8 +96,12 @@ class OpenAIService(LLMServiceBase):
         """
         Fetches the list of available models from the Ollama server.
         """
-        # TODO: implement function
-        pass
+        response = self.client.models.list()
+        model_ids = sorted([model.id for model in response.data])
+        print(f'... Available OpenAI models:')
+        for model in model_ids:
+            print(f"... ... {model}")
+        return 
 
 
 class GroqService(LLMServiceBase):
@@ -154,8 +129,12 @@ class GroqService(LLMServiceBase):
         """
         Fetches the list of available models from the Ollama server.
         """
-        # TODO: implement function
-        pass
+        response = self.client.models.list()
+        model_ids = sorted([model.id for model in response.data])
+        print(f'... Available Groq models:')
+        for model in model_ids:
+            print(f"... ... {model}")
+        return 
 
 
 class OllamaService(LLMServiceBase):
@@ -206,8 +185,7 @@ class OllamaService(LLMServiceBase):
                 }
             ],
             options={
-                'temperature': temperature,
-                'num_predict': 4096,
+                'temperature': temperature
             })
         return response['message']['content']
 
@@ -227,8 +205,10 @@ class OllamaService(LLMServiceBase):
                 models = data
             elif isinstance(data, dict) and 'models' in data:
                 models = data['models']
-                for model in models:
-                    print(model)
+                model_names = sorted([model['name'] for model in models])
+                print(f'... Available Ollama models:')
+                for model in model_names:
+                    print(f"... ... {model}")
             else:
                 print(f"... Unexpected response format: {data}")
                 models = []
@@ -251,27 +231,6 @@ class OllamaService(LLMServiceBase):
         except Exception as e:
             print(f"... An unexpected error occurred while listing models: {e}")
             raise
-
-
-    # def _call_api(self, template_text, text_input, model, temperature):
-    #     try:
-    #         print(f"{template_text} {text_input}")
-    #         response = self.client.chat(
-    #             model=model,
-    #             messages=[
-    #                 {
-    #                     "role": "user",
-    #                     "content": f"{template_text} {text_input}"
-    #                 }
-    #             ],
-    #             options={
-    #                 'temperature': temperature,
-    #                 'num_predict': 4096,
-    #             })
-    #         return response['message']['content']
-    #     except Exception as e:
-    #         print(f"... API call failed: {e}")
-    #         raise
 
 
 ### Embedders ### 

@@ -248,8 +248,8 @@ def validate_summaries(llm_result):
     return summaries
 
 def print_entities(entities: list[dict]) -> None:
-    [print(f"... {entity['text']} → {entity['ner_tag']}") for entity in entities]
+    [print(f"... ... {entity['text']} → {entity['ner_tag']}") for entity in entities]
 
 def print_summaries(summaries: list[dict]) -> None:
     for idx, item in enumerate(summaries):
-        print(f"... [{idx + 1}] {item['topic']}: {item['summary']} (LOCATION: {item['location']})")
+        print(f"... ... [{idx + 1}] {item['topic']}: {item['summary']} (LOCATION: {item['location']})")

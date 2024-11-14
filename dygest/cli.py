@@ -23,11 +23,27 @@ class NERlanguages(str, Enum):
     FR = 'fr'
     ES = 'es'
     NL = 'nl'
+    
+def resolve_input_dir(filepath: str = None, output_dir: str = None) -> Path:
+    input_path = Path(filepath)
+    
+    if not input_path.exists():
+        typer.echo(f"Error: The path '{filepath}' does not exist.", err=True)
+        raise typer.Exit(code=1)
 
+    if output_dir is None:
+        if input_path.is_dir():
+            resolved_output_dir = input_path
+        else:
+            resolved_output_dir = input_path.parent
+    else:
+        resolved_output_dir = Path(output_dir)
+    return resolved_output_dir
+    
 @app.command(no_args_is_help=True)
 def main(
     filepath: str = typer.Option(
-        ...,
+        None,
         "--files",
         "-f",
         help="Path to the input folder or .txt file."
@@ -39,7 +55,7 @@ def main(
         help="If not provided, outputs will be saved in the input folder.",
     ),
     llm_service: LLMService = typer.Option(
-        LLMService.GROQ.value,
+        None,
         "--llm_service",
         "-llm",
         help='Select the LLM service for creating digests.',
@@ -57,7 +73,7 @@ def main(
         help='Temperature of LLM.',
     ),
     embedding_service: EmbeddingService = typer.Option(
-        EmbeddingService.OPENAI.value,
+        None,
         "--embedding_service",
         "-emb",
         help='Select the Embedding service for creating digests.',
@@ -81,10 +97,9 @@ def main(
         help="Similarity threshold for removing duplicate summaries."
     ),
     ner: bool = typer.Option(
-        True,
+        False,
         "--ner",
-        help="Enable Named Entity Recognition (NER). Defaults to True.",
-        is_flag=True
+        help="Enable Named Entity Recognition (NER). Defaults to False.",
     ),
     language: NERlanguages = typer.Option(
         NERlanguages.AUTO,
@@ -97,22 +112,24 @@ def main(
         "--precise",
         "-p",
         help="Enable precise mode for NER. Defaults to fast mode.",
-        is_flag=True
     ),
     verbose: bool = typer.Option(
         False,
         "--verbose",
         "-v",
-        help="Enable verbose output.",
-        is_flag=True
+        help="Enable verbose output. Defaults to False.",
     ),
     export_metadata: bool = typer.Option(
-        True,
+        False,
         "--export_metadata",
         "-meta",
-        help="Enable exporting metadata to output file(s).",
-        is_flag=True,
-    )
+        help="Enable exporting metadata to output file(s). Defaults to False.",
+    ),
+    list_models: bool = typer.Option(
+        False,
+        "--list_models",
+        help="List all available models for a LLM service.",
+    ),
 ):
     """
     🌞 DYGEST: Document Insights Generator 🌞
@@ -302,21 +319,37 @@ def main(
                 export_metadata=self.export_metadata
             )
             html_writer.write_html()
-
+            
+    # List models
+    if list_models:
+        if llm_service is None:
+            print(f'... Please provide a LLM service for listing available models.')
+            return
+        elif llm_service in [llm for llm in LLMService]:
+            if llm_service.value == 'ollama':
+                ollama_client = llms.OllamaService()
+                ollama_client.list_models()
+                return
+            elif llm_service.value == 'groq':
+                groq_client = llms.GroqService()
+                groq_client.list_models()
+                return
+            elif llm_service.value == 'openai':
+                openai_client = llms.OpenAIService()
+                openai_client.list_models()
+                return
+            else:
+                print(f'... Unknown LLM service.')
+                return
+            
+    # Check for file
+    filepath = Path(filepath)
+    if filepath is None:
+        print('... Please provide a file or folder (--files, -f).')
+        return
+                
     # Pass input_filepath dir as output if None was provided
-    input_path = Path(filepath)
-    
-    if not input_path.exists():
-        typer.echo(f"Error: The path '{filepath}' does not exist.", err=True)
-        raise typer.Exit(code=1)
-
-    if output_dir is None:
-        if input_path.is_dir():
-            resolved_output_dir = input_path
-        else:
-            resolved_output_dir = input_path.parent
-    else:
-        resolved_output_dir = Path(output_dir)
+    resolved_output_dir = resolve_input_dir(filepath, output_dir)
 
     processor = DygestProcessor(
         filepath=filepath,

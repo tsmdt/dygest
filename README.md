@@ -64,27 +64,28 @@ pip install .
  🌞 DYGEST: Document Insights Generator 🌞
 
 ╭─ Options ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  --files               -f         TEXT                         Path to the input folder or .txt file. [default: None] [required]                         │
-│    --output_dir          -o         TEXT                         If not provided, outputs will be saved in the input folder. [default: None]               │
-│    --llm_service         -llm       [ollama|openai|groq]         Select the LLM service for creating digests. [default: groq]                              │
-│    --llm_model           -m         TEXT                         LLM model name. Defaults to 'llama-3.1-70b-versatile' (Groq), 'gpt-4o-mini' (OpenAI) or   │
-│                                                                  'llama3.1' (Ollama).                                                                      │
-│                                                                  [default: None]                                                                           │
-│    --temperature         -t         FLOAT                        Temperature of LLM. [default: 0.1]                                                        │
-│    --embedding_service   -emb       [ollama|openai]              Select the Embedding service for creating digests. [default: openai]                      │
-│    --embedding_model     -e         TEXT                         Embedding model name. Defaults to 'text-embedding-3-small' (OpenAI) or 'nomic-embed-text' │
-│                                                                  (Ollama).                                                                                 │
-│                                                                  [default: None]                                                                           │
-│    --chunk_size          -c         INTEGER                      Maximum number of tokens per chunk. [default: 1000]                                       │
-│    --sim_threshold       -sim       FLOAT                        Similarity threshold for removing duplicate summaries. [default: 0.85]                    │
-│    --ner                                                         Enable Named Entity Recognition (NER). Defaults to False.                                 │
-│    --lang                -l         [auto|ar|de|da|en|fr|es|nl]  Language of file(s) for NER. Defaults to auto-detection. [default: auto]                  │
-│    --precise             -p                                      Enable precise mode for NER. Defaults to fast mode.                                       │
-│    --verbose             -v                                      Enable verbose output. Defaults to False.                                                 │
-│    --export_metadata     -meta                                   Enable exporting metadata to output file(s). Defaults to False.                           │
-│    --install-completion                                          Install completion for the current shell.                                                 │
-│    --show-completion                                             Show completion for the current shell, to copy it or customize the installation.          │
-│    --help                                                        Show this message and exit.                                                               │
+│ --files               -f         TEXT                         Path to the input folder or .txt file. [default: None]                                       │
+│ --output_dir          -o         TEXT                         If not provided, outputs will be saved in the input folder. [default: None]                  │
+│ --llm_service         -llm       [ollama|openai|groq]         Select the LLM service for creating digests. [default: None]                                 │
+│ --llm_model           -m         TEXT                         LLM model name. Defaults to 'llama-3.1-70b-versatile' (Groq), 'gpt-4o-mini' (OpenAI) or      │
+│                                                               'llama3.1' (Ollama).                                                                         │
+│                                                               [default: None]                                                                              │
+│ --temperature         -t         FLOAT                        Temperature of LLM. [default: 0.1]                                                           │
+│ --embedding_service   -emb       [ollama|openai]              Select the Embedding service for creating digests. [default: None]                           │
+│ --embedding_model     -e         TEXT                         Embedding model name. Defaults to 'text-embedding-3-small' (OpenAI) or 'nomic-embed-text'    │
+│                                                               (Ollama).                                                                                    │
+│                                                               [default: None]                                                                              │
+│ --chunk_size          -c         INTEGER                      Maximum number of tokens per chunk. [default: 1000]                                          │
+│ --sim_threshold       -sim       FLOAT                        Similarity threshold for removing duplicate summaries. [default: 0.85]                       │
+│ --ner                                                         Enable Named Entity Recognition (NER). Defaults to False.                                    │
+│ --lang                -l         [auto|ar|de|da|en|fr|es|nl]  Language of file(s) for NER. Defaults to auto-detection. [default: auto]                     │
+│ --precise             -p                                      Enable precise mode for NER. Defaults to fast mode.                                          │
+│ --verbose             -v                                      Enable verbose output. Defaults to False.                                                    │
+│ --export_metadata     -meta                                   Enable exporting metadata to output file(s). Defaults to False.                              │
+│ --list_models                                                 List all available models for a LLM service.                                                 │
+│ --install-completion                                          Install completion for the current shell.                                                    │
+│ --show-completion                                             Show completion for the current shell, to copy it or customize the installation.             │
+│ --help                                                        Show this message and exit.                                                                  │
 ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -107,3 +108,9 @@ Creates a `.html` using `Ollama` with LLM `llama3.1:8b-instruct-q8_0` and embedd
 dygest --files ./documents/my_txt.txt -llm openai -emb openai --ner -p --sim_threshold 0.6
 ```
 Creates a `.html` using `OpenAI` with default LLM `gpt-4o-mini` and default embedding model `text-embedding-3-small` while enabling `NER` in `precise` mode. The similarity threshold set with `sim_threshold` is generous and will remove many summaries that are somewhat comparable to other ones found in the TOC.
+
+### List available models for a LLM service:
+```shell
+dygest -llm openai --list_models
+```
+Lists all available `OpenaAI` models.

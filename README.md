@@ -17,9 +17,9 @@
 3. **Duplicate Removal**: After retrieving all summaries a similarity comparison is run to detect identical or very similar summaries that will then get removed. This detection can be controlled via the `--sim_threshold` option. A higher float number means a higher threshold for detecting a duplicate. A lower float number means that similar summaries are much more loosly identified.
 4. **TOC Creation**: After the duplicate removal a table of contents is created using the LLM service. (**Hint**: a larger LLM (`70b` compared to `8b`) generally means better results.)
 5. **HTML**: By default **dygest** will create a `.html` file that combines TOC, NER result and the provided text with a focus on usability and quick access to information. The provided `.txt` can be edited in the browser to make further changes (e.g. correction of a transcript).
-  
+
 <p align="center">
-  <img width="80%" alt="dygest_html" src="https://github.com/user-attachments/assets/163a5e8f-db6c-49b1-b762-bbb38f86da3a">
+  <img width="80%" alt="dygest_html" src="https://github.com/user-attachments/assets/ea8d9763-f668-40d9-9acc-466314d59e17">
 </p>
 
 ## Requirements
@@ -54,7 +54,6 @@ source venv/bin/activate
 pip install .
 ```
 
-
 ## Usage
 ```shell
 >>> dygest
@@ -64,28 +63,29 @@ pip install .
  🌞 DYGEST: Document Insights Generator 🌞
 
 ╭─ Options ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --files               -f         TEXT                         Path to the input folder or .txt file. [default: None]                                       │
-│ --output_dir          -o         TEXT                         If not provided, outputs will be saved in the input folder. [default: None]                  │
-│ --llm_service         -llm       [ollama|openai|groq]         Select the LLM service for creating digests. [default: None]                                 │
-│ --llm_model           -m         TEXT                         LLM model name. Defaults to 'llama-3.1-70b-versatile' (Groq), 'gpt-4o-mini' (OpenAI) or      │
-│                                                               'llama3.1' (Ollama).                                                                         │
-│                                                               [default: None]                                                                              │
-│ --temperature         -t         FLOAT                        Temperature of LLM. [default: 0.1]                                                           │
-│ --embedding_service   -emb       [ollama|openai]              Select the Embedding service for creating digests. [default: None]                           │
-│ --embedding_model     -e         TEXT                         Embedding model name. Defaults to 'text-embedding-3-small' (OpenAI) or 'nomic-embed-text'    │
-│                                                               (Ollama).                                                                                    │
-│                                                               [default: None]                                                                              │
-│ --chunk_size          -c         INTEGER                      Maximum number of tokens per chunk. [default: 1000]                                          │
-│ --sim_threshold       -sim       FLOAT                        Similarity threshold for removing duplicate summaries. [default: 0.85]                       │
-│ --ner                                                         Enable Named Entity Recognition (NER). Defaults to False.                                    │
-│ --lang                -l         [auto|ar|de|da|en|fr|es|nl]  Language of file(s) for NER. Defaults to auto-detection. [default: auto]                     │
-│ --precise             -p                                      Enable precise mode for NER. Defaults to fast mode.                                          │
-│ --verbose             -v                                      Enable verbose output. Defaults to False.                                                    │
-│ --export_metadata     -meta                                   Enable exporting metadata to output file(s). Defaults to False.                              │
-│ --list_models                                                 List all available models for a LLM service.                                                 │
-│ --install-completion                                          Install completion for the current shell.                                                    │
-│ --show-completion                                             Show completion for the current shell, to copy it or customize the installation.             │
-│ --help                                                        Show this message and exit.                                                                  │
+│ --files               -f        TEXT                         Path to the input folder or .txt file. [default: None]                                        │
+│ --output_dir          -o        TEXT                         If not provided, outputs will be saved in the input folder. [default: None]                   │
+│ --llm_service         -llm      [ollama|openai|groq]         Select the LLM service for creating digests. [default: None]                                  │
+│ --llm_model           -m        TEXT                         LLM model name. Defaults to 'llama-3.1-70b-versatile' (Groq), 'gpt-4o-mini' (OpenAI) or       │
+│                                                              'llama3.1' (Ollama).                                                                          │
+│                                                              [default: None]                                                                               │
+│ --temperature         -t        FLOAT                        Temperature of LLM. [default: 0.1]                                                            │
+│ --embedding_service   -emb      [ollama|openai]              Select the Embedding service for creating digests. [default: None]                            │
+│ --embedding_model     -e        TEXT                         Embedding model name. Defaults to 'text-embedding-3-small' (OpenAI) or 'nomic-embed-text'     │
+│                                                              (Ollama).                                                                                     │
+│                                                              [default: None]                                                                               │
+│ --chunk_size          -c        INTEGER                      Maximum number of tokens per chunk. [default: 1000]                                           │
+│ --summarize           -s                                     Include a short summary for the whole text. Defaults to False.                                │
+│ --sim_threshold       -t        FLOAT                        Similarity threshold for removing duplicate topics. [default: 0.85]                           │
+│ --ner                 -n                                     Enable Named Entity Recognition (NER). Defaults to False.                                     │
+│ --lang                -l        [auto|ar|de|da|en|fr|es|nl]  Language of file(s) for NER. Defaults to auto-detection. [default: auto]                      │
+│ --precise             -p                                     Enable precise mode for NER. Defaults to fast mode.                                           │
+│ --verbose             -v                                     Enable verbose output. Defaults to False.                                                     │
+│ --export_metadata                                            Enable exporting metadata to output file(s). Defaults to False.                               │
+│ --list_models                                                List all available models for a LLM service.                                                  │
+│ --install-completion                                         Install completion for the current shell.                                                     │
+│ --show-completion                                            Show completion for the current shell, to copy it or customize the installation.              │
+│ --help                                                       Show this message and exit.                                                                   │
 ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 

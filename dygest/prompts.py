@@ -1,14 +1,72 @@
+# 3. **Make sure to capture names, organisations, (historical) events, places or dates** if they are relevant to the topic.
+
+# CREATE_SUMMARIES = """
+# Perform the following tasks on the provided text:
+
+# 1. **Identify the top 2 most important topics** discussed in the text.
+# 2. **For each identified topic**, generate a concise summary using a short phrase that effectively captures the key points related to that topic.
+# 3. **The summary should answer these questions: Who did what when and why?**
+
+# **Return the results in the language of the Input Text as JSON. Do NOT add anything else and use this template without any alterations:**
+
+# [
+#   {
+#     "topic": "Topic Name",
+#     "summary": "A concise phrase related to the topic **in the language of the Input Text**",
+#     "location": "First 5 words of the corresponding text chunk of the Input Text"
+#   },
+#   ...
+# ]
+
+# **Input Text:**
+# """
+
+
+# CREATE_SUMMARIES = """
+# Perform the following tasks on the provided text:
+
+# 1. **Identify the top 2 most important topics** discussed in the text.
+# 2. **For each identified topic**, generate a concise summary that includes key details as a short phrase:
+#    - **Who**: Names of individuals involved.
+#    - **What**: Description of the events or actions.
+#    - **When**: Mentioned dates.
+#    - **Where**: Locations related to the events.
+#    - **Why**: Purpose or reason behind the events.
+# 3. **Ensure the summary answers these questions**: Who did what, when, where, and why.
+
+# **Return the results in the language of the Input Text as JSON. Do NOT add anything else and use this template without any alterations:**
+
+# [
+#   {
+#     "topic": "Topic Name",
+#     "summary": "A concise phrase related to the topic **in the language of the Input Text**",
+#     "location": "First 5 words of the corresponding text chunk of the Input Text"
+#   },
+#   ...
+# ]
+
+# **Input Text:**
+# """
+
+
 CREATE_SUMMARIES = """
 Perform the following tasks on the provided text:
 
-1. **Identify the top 2 most important topics** discussed in the text.
-2. **For each identified topic**, generate a concise description using a short phrase or group of keywords that effectively captures the key points related to that topic.
+1. **Identify the top 2 most important topics** discussed in the text. 
+   - **Each topic name should be a concise, headline-style phrase** (e.g., no more than 5 words) that effectively captures the essence of the topic.
+
+2. **For each identified topic**, generate a concise summary that includes key details as a short phrase:
+   - **Who**: Names of individuals involved.
+   - **What**: Description of the events or actions.
+   - **When**: Mentioned dates.
+   - **Where**: Locations related to the events.
+   - **Why**: Purpose or reason behind the events.
 
 **Return the results in the language of the Input Text as JSON. Do NOT add anything else and use this template without any alterations:**
 
 [
   {
-    "topic": "Topic Name",
+    "topic": "Concise Subheading",
     "summary": "A concise phrase related to the topic **in the language of the Input Text**",
     "location": "First 5 words of the corresponding text chunk of the Input Text"
   },
@@ -36,7 +94,7 @@ Perform the following tasks on the provided list of summaries:
 
 [
   {
-    "headline": "Headline Name **in the language of the summaries**",
+    "headline": "Headline Name",
     "topics": [
       {
         "summary": "Provided summary",
@@ -51,6 +109,37 @@ Perform the following tasks on the provided list of summaries:
   },
   // Additional headlines...
 ]
+
+**Input Summaries:**
+"""
+
+
+CREATE_TLDR = """
+Perform the following tasks on the provided text chunk:
+
+1. **Generate a summary of max. 3 sentences with the most important topics** for the provided text chunk.
+2. **Capture key details in those summaries**:
+   - **Who**: Names of individuals involved.
+   - **What**: Description of the events or actions.
+   - **When**: Mentioned dates.
+   - **Where**: Locations related to the events.
+   - **Why**: Purpose or reason behind the events.
+3. **Return the results in the language of the Input Text as a plain string.**
+
+**Return only the summary without any additional text.**
+
+**Text Chunk:**
+"""
+
+
+COMBINE_TLDRS = """
+Perform the following tasks on the provided list of summaries:
+
+1. **Generate a single summary of maximum 5 sentences that captures the most important topics from all provided summaries**.
+2. **Remove similar summaries to ensure the remaining summaries are unique**.
+3. **Return the result in the same language as the input summaries as a plain string**.
+
+**Return only the summary without any additional text.**
 
 **Input Summaries:**
 """

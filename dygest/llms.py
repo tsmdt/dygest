@@ -21,7 +21,9 @@ from dygest import prompts
 PROMPTS = {
   'summarize': prompts.CREATE_SUMMARIES,
   'clean_summaries': prompts.CLEAN_SUMMARIES,
-  'create_toc': prompts.CREATE_TOC
+  'create_toc': prompts.CREATE_TOC,
+  'create_tldr': prompts.CREATE_TLDR,
+  'combine_tldrs': prompts.COMBINE_TLDRS
 }
 
 

@@ -90,15 +90,22 @@ def main(
         "-c",
         help="Maximum number of tokens per chunk."
     ),
+    summarize: bool = typer.Option(
+        False,
+        "--summarize",
+        "-s",
+        help="Include a short summary for the whole text. Defaults to False.",
+    ),
     sim_threshold: float = typer.Option(
         0.85,
         "--sim_threshold",
-        "-sim",
-        help="Similarity threshold for removing duplicate summaries."
+        "-t",
+        help="Similarity threshold for removing duplicate topics."
     ),
     ner: bool = typer.Option(
         False,
         "--ner",
+        "-n",
         help="Enable Named Entity Recognition (NER). Defaults to False.",
     ),
     language: NERlanguages = typer.Option(
@@ -122,7 +129,6 @@ def main(
     export_metadata: bool = typer.Option(
         False,
         "--export_metadata",
-        "-meta",
         help="Enable exporting metadata to output file(s). Defaults to False.",
     ),
     list_models: bool = typer.Option(
@@ -150,6 +156,7 @@ def main(
             embedding_model: str = None,
             temperature: float = 0.1,
             chunk_size: int = 1000,
+            summarize: bool = False,
             sim_threshold: float = 0.8,
             ner: bool = True,
             language: NERlanguages = NERlanguages.AUTO,
@@ -169,6 +176,7 @@ def main(
             self.token_count = None
             self.temperature = temperature
             self.chunk_size = chunk_size
+            self.summarize = summarize
             self.sim_threshold = sim_threshold
             self.ner = ner
             self.language = language.value 
@@ -267,6 +275,7 @@ def main(
 
             # Retrieve LLM summaries for text chunks
             all_summaries = []
+            tldrs = []
             print(f'... Generating insights')
             for idx, chunk in enumerate(tqdm(chunks, desc=str(self.llm_service))):
                 result = self.llm_client.prompt(
@@ -282,6 +291,15 @@ def main(
                 if self.verbose:
                     print(f"... SUMMARIES FOR CHUNK {idx + 1}:")
                     utils.print_summaries(summaries)
+                    
+                if self.summarize:
+                    tldr = self.llm_client.prompt(
+                        template='create_tldr',
+                        text_input=chunk,
+                        model=self.llm_model,
+                        temperature=self.temperature
+                    )
+                    tldrs.append(tldr)
 
             # Post-Processing: Remove similar summaries
             print(f'... Removing similar summaries')
@@ -295,6 +313,7 @@ def main(
             )
             filtered_summaries = sp.get_filtered_summaries()
 
+            # Post-Processing: Create TOC
             print(f'... Creating TOC')
             toc_summaries = self.llm_client.prompt(
                 template='create_toc',
@@ -303,6 +322,15 @@ def main(
                 temperature=self.temperature
             )
             processed_summaries = utils.validate_summaries(toc_summaries)
+            
+            # Post-Processing: Clean TLDR
+            if self.summarize:
+                combined_tldrs = self.llm_client.prompt(
+                    template='combine_tldrs',
+                    text_input='\n'.join(tldrs),
+                    model=self.llm_model,
+                    temperature=self.temperature
+                )
 
             # Write Output
             html_writer = output_utils.HTMLWriter(
@@ -311,6 +339,7 @@ def main(
                 text=text,
                 named_entities=all_entities,
                 summaries=processed_summaries,
+                tldrs=combined_tldrs if self.summarize else None,
                 language=language,
                 llm_service=self.llm_service,
                 model=self.llm_model,
@@ -360,6 +389,7 @@ def main(
         embedding_model=embedding_model,
         temperature=temperature,
         chunk_size=chunk_size,
+        summarize=summarize,
         sim_threshold=sim_threshold,
         ner=ner,
         language=language,

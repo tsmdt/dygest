@@ -158,7 +158,7 @@ HTML_CONTENT = """
     }
 
     .metadata-header {
-        font-family: 'Courier New', Courier, monospace;
+        font-family: monospace;
         margin-left: 12px;
         cursor: pointer; 
         position: relative; 
@@ -167,10 +167,10 @@ HTML_CONTENT = """
     }
 
     .metadata-content {
-        font-family: 'Courier New', Courier, monospace;
+        font-family: monospace;
         font-size: 15px;
         display: none;
-        margin-left: 12px; 
+        margin-left: 10px; 
         transition: max-height 0.3s ease, opacity 0.3s ease;
         overflow: hidden;
         opacity: 0;
@@ -205,9 +205,22 @@ HTML_CONTENT = """
 
     .timestamp {
         color: #f41ad7; 
-        font-family: 'Courier New', Courier, monospace; 
+        font-family: monospace; 
         font-size: 16px;
         cursor: default;
+    }
+
+    .tldr {
+        color: #666666;
+        font-family: monospace;
+        margin-left: 10px;
+        margin-bottom: 15px;
+        font-family: monospace;
+        font-size: 15px;
+    }
+
+    .tldr-content {
+        font-style: italic;
     }
 
     ol ul {
@@ -271,9 +284,11 @@ HTML_CONTENT = """
             <!-- Metadata -->
             <div class="metadata">
                 <h6 class="metadata-header"></h6>
-                <div class="metadata-content">
-                    
-                </div>
+                <div class="metadata-content"></div>
+            </div>
+            
+            <!-- TL;DR -->
+            <div class="tldr">
             </div>
 
             <!-- Main Content -->
@@ -418,7 +433,7 @@ HTML_CONTENT = """
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-    // Select all metadata headers
+    // Select metadata headers
     const metadataHeaders = document.querySelectorAll('.metadata-header');
 
     metadataHeaders.forEach(header => {

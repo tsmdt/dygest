@@ -28,6 +28,7 @@ class HTMLWriter:
             text: str, 
             named_entities: list, 
             summaries: list[dict],
+            tldrs: str,
             language: str,
             llm_service: str,
             model: str,
@@ -40,6 +41,7 @@ class HTMLWriter:
         self.text = text
         self.named_entities = named_entities
         self.summaries = summaries
+        self.tldrs = tldrs
         self.language = language
         self.llm_service = llm_service
         self.model = model
@@ -108,7 +110,6 @@ class HTMLWriter:
                     entity_count_tag.string = f"Entities: {ner_string}"
                     div_metadata_content.append(entity_count_tag)
 
-
     def add_controls(self):
         # Append additional button controls to HTML
         div_additional_controls = self.soup.find('div', class_='additional-controls')
@@ -173,6 +174,18 @@ class HTMLWriter:
         """
         Appends main content blocks to a default HTML template.
         """
+        # Add TL;DR
+        if self.tldrs:
+            div_tldr = self.soup.find('div', class_='tldr')
+            if div_tldr:                
+                summary_tag = self.soup.new_tag(
+                    'span',
+                    attrs={
+                        'class': 'tldr-content'
+                    })
+                summary_tag.string = self.tldrs.strip()
+                div_tldr.append(summary_tag)
+        
         # Add summaries heading
         div_summaries = self.soup.find('div', id='summary-content')
         if div_summaries:
@@ -273,7 +286,7 @@ class HTMLWriter:
         
         ### 3. Match timestamp / speaker patterns of this type: [00:00:06.743] [SPEAKER_09] ###
         
-        pattern = r'\[\d{2}:\d{2}:\d{2}\.\d{3}\] \[SPEAKER_\d+\]|\[SPEAKER_\d+\]'
+        pattern = r'\[\d{2}:\d{2}:\d{2}\.\d{3}\] \[(?:SPEAKER_\d+|UNKNOWN)\]|\[(?:SPEAKER_\d+|UNKNOWN)\]'
         
         for match in re.finditer(pattern, self.text):
             start, end = match.start(), match.end()

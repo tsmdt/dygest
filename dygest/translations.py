@@ -44,4 +44,13 @@ UI_TRANSLATIONS = {
         'es': 'Temas',
         'nl': 'Onderwerpen'
     },
+    'summary': {
+        'ar': 'الملخص',
+        'en': 'Summary',
+        'da': 'Sammenfatning',
+        'de': 'Zusammenfassung',
+        'fr': 'Résumé',
+        'es': 'Resumen',
+        'nl': 'Samenvatting'
+    }
 }

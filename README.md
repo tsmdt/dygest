@@ -16,7 +16,7 @@
 2. **Summary Creation**: For each chunk 1-2 summaries are generated using a LLM service of your choice (`OpenAI`, `Groq`, `Ollama`); all summaries focus on the most relevant topics discussed in the corresponding chunk. (**Hint**: a larger LLM (`70b` compared to `8b`) generally means better results.)
 3. **Duplicate Removal**: After retrieving all summaries a similarity comparison is run to detect identical or very similar summaries that will then get removed. This detection can be controlled via the `--sim_threshold` option. A higher float number means a higher threshold for detecting a duplicate. A lower float number means that similar summaries are much more loosly identified.
 4. **TOC Creation**: After the duplicate removal a table of contents is created using the LLM service. (**Hint**: a larger LLM (`70b` compared to `8b`) generally means better results.)
-5. **Document-wise summary**: A short summary for the whole document can be generated too.
+5. **Document-wise Summary**: A short summary for the whole document can be generated too.
 6. **HTML**: By default **dygest** will create a `.html` file that combines TOC, NER result and the provided text with a focus on usability and quick access to information. The provided `.txt` can be edited in the browser to make further changes (e.g. correction of a transcript).
 
 <p align="center">

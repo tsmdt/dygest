@@ -99,13 +99,13 @@ Creates dygest using `Groq API` with default model `llama-3.1-70b-versatile` and
 
 ### Generate dygest with NER using local LLMs:
 ```shell
-dygest --files ./documents/my_txt.txt -llm ollama -m llama3.1:8b-instruct-q8_0 -emb ollama -e chroma/all-minilm-l6-v2-f32:latest --ner -v -meta
+dygest --files ./documents/my_txt.txt -llm ollama -m llama3.1:8b-instruct-q8_0 -emb ollama -e chroma/all-minilm-l6-v2-f32:latest -n -v --export_metadata
 ```
 Creates a `.html` using `Ollama` with LLM `llama3.1:8b-instruct-q8_0` and embeddings model `chroma/all-minilm-l6-v2-f32:latest` while enabling `NER`, `verbose` output and exporting processing `metadata` to the `.html`. Make sure that you have the models you want to use pulled with `Ollama` first.
 
 ### Generate dygest OpenAI with NER and genereous duplicate removal:
 ```shell
-dygest --files ./documents/my_txt.txt -llm openai -emb openai --ner -p --sim_threshold 0.6
+dygest --files ./documents/my_txt.txt -llm openai -emb openai -n -p --sim_threshold 0.6
 ```
 Creates a `.html` using `OpenAI` with default LLM `gpt-4o-mini` and default embedding model `text-embedding-3-small` while enabling `NER` in `precise` mode. The similarity threshold set with `sim_threshold` is generous and will remove many summaries that are somewhat comparable to other ones found in the TOC.
 

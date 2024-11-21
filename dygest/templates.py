@@ -105,7 +105,7 @@ HTML_CONTENT = """
     }
 
     .content {
-        line-height: 1.75em;
+        line-height: 1.75;
     }
 
     .controls {
@@ -382,11 +382,26 @@ HTML_CONTENT = """
     function changeFontSize(delta) {
         let elements = document.querySelectorAll('.content');
         elements.forEach(function(element) {
-            let style = window.getComputedStyle(element).getPropertyValue('font-size');
-            let currentSize = parseFloat(style); 
+            let currentSize;
+
+            // Try to read the current font size from the inline style
+            if (element.style.fontSize) {
+                currentSize = parseFloat(element.style.fontSize);
+                console.log('Current font size from inline style:', currentSize, 'px');
+            } else {
+                // If not set, use the initial font size (e.g., 18px)
+                currentSize = 18;
+                console.log('No inline font size set. Using initial font size:', currentSize, 'px');
+            }
+
             let newSize = currentSize + delta;
-            if (newSize >= 6 && newSize <= 48) { 
+            console.log('New font size:', newSize, 'px');
+
+            if (newSize >= 6 && newSize <= 48) {
                 element.style.fontSize = newSize + 'px';
+                console.log('Font size updated to:', newSize, 'px');
+            } else {
+                console.log('New font size out of bounds:', newSize, 'px');
             }
         });
     }

@@ -20,7 +20,7 @@
 6. **HTML**: By default **dygest** will create a `.html` file that combines TOC, NER result and the provided text with a focus on usability and quick access to information. The provided `.txt` can be edited in the browser to make further changes (e.g. correction of a transcript).
 
 <p align="center">
-  <img width="80%" alt="dygest_html" src="https://github.com/user-attachments/assets/ea8d9763-f668-40d9-9acc-466314d59e17">
+  <img src="./assets/dygest_html.png" width="100%">
 </p>
 
 ## Requirements

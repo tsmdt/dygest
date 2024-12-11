@@ -27,10 +27,9 @@ class HTMLWriter:
             output_filepath: Path,
             text: str, 
             named_entities: list, 
-            summaries: list[dict],
+            toc: list[dict],
             tldrs: str,
             language: str,
-            llm_service: str,
             model: str,
             mode: str,
             token_count: int,
@@ -40,10 +39,9 @@ class HTMLWriter:
         self.output_filepath = output_filepath
         self.text = text
         self.named_entities = named_entities
-        self.summaries = summaries
+        self.toc = toc
         self.tldrs = tldrs
         self.language = language
-        self.llm_service = llm_service
         self.model = model
         self.mode = mode
         self.token_count = token_count
@@ -79,12 +77,12 @@ class HTMLWriter:
             if h6_tag:
                 h6_tag.string = f'{self.filename}'
             
-            # Add model and LLM service
+            # Add model
             if self.export_metadata:
                 div_metadata_content = self.soup.find('div', class_='metadata-content')
                 if div_metadata_content:
                     llm_service_tag = self.soup.new_tag('span')
-                    llm_service_tag.string = f"Created with {self.model} ({self.llm_service.name})"
+                    llm_service_tag.string = f"Created with {self.model}"
                     div_metadata_content.append(llm_service_tag)
                     
                     br_tag = self.soup.new_tag('br')
@@ -116,7 +114,7 @@ class HTMLWriter:
         
         if div_additional_controls:
             # Add NER Highlighting Button  
-            if len(self.named_entities) != 0:
+            if self.named_entities:
                 button_NER_highlighting = self.soup.new_tag(
                     'button',
                     attrs={
@@ -186,24 +184,40 @@ class HTMLWriter:
                 summary_tag.string = self.tldrs.strip()
                 div_tldr.append(summary_tag)
         
-        # Add summaries heading
-        div_summaries = self.soup.find('div', id='summary-content')
-        if div_summaries:
+        # Add TOC heading
+        if self.toc:
+            div_additional_controls = self.soup.find('div', class_='additional-controls')
+            div_summaries = self.soup.new_tag('div', attrs={'class': 'summaries'})
+            
+            div_summaries_content = self.soup.new_tag(
+                'div',
+                attrs={
+                    'id': 'summary-content',
+                    'style': 'display: block; text-align: left'
+                }
+            )
+            
             h5_tag = self.soup.new_tag(
                 'h5',
                 attrs={
                     'style': 'text-align: center;'
-                })
+                }
+            )
             h5_tag.string = get_translation(
                 key='heading_topics',
                 language_code=self.language
-                )
-            div_summaries.insert_before(h5_tag)
+            )
+            div_summaries_content.append(h5_tag)
+            
+            ol_tag = self.soup.new_tag('ol')
+            div_summaries_content.append(ol_tag)
+            div_summaries.append(div_summaries_content)
+            div_additional_controls.insert_after(div_summaries)
 
-        # TOC
-        if self.mode == 'create_toc':
+            # Add TOC topics and links
             ol_tag = self.soup.find("ol")
-            for item in self.summaries:
+            for item in self.toc:
+                
                 # Create a list element for the headline
                 li_tag = self.soup.new_tag("li")
                 strong_tag = self.soup.new_tag("strong")
@@ -231,58 +245,38 @@ class HTMLWriter:
                 li_tag.append(ul_tag)
                 ol_tag.append(li_tag)
 
-        # Summaries
-        elif self.mode == 'clean_summaries':
-            ol_tag = self.soup.find("ol")
-            for el in self.summaries:
-                li_tag = self.soup.new_tag("li")
-                
-                strong_tag = self.soup.new_tag("strong")
-                strong_tag.string = f'{el["topic"]}: '
-                
-                li_tag.append(strong_tag)
-                
-                # Create a link to the location in the text
-                location = el.get('location')
-                if location:
-                    link_id = f"location_{location.replace(' ', '_')}"
-                    link_tag = self.soup.new_tag("a", href=f"#{link_id}")
-                    link_tag.string = f"{el['summary']}"
-                    li_tag.append(link_tag)
-                
-                ol_tag.append(li_tag)
-        else:
-            print(f'... Wrong prompt template: {self.mode}')
-        
+
         ### Content Processing ###     
-           
+        
         events = []
         
         ### 1. Collect NER events ###
         
-        for entity in self.named_entities:
-            entity_start = entity['start']
-            entity_end = entity['end']
-            entity_text = entity['text']
-            entity_ner_tag = entity['ner_tag']
+        if self.named_entities:
+            for entity in self.named_entities:
+                entity_start = entity['start']
+                entity_end = entity['end']
+                entity_text = entity['text']
+                entity_ner_tag = entity['ner_tag']
 
-            # Skip certain entities
-            if entity_text in ['SPEAKER', 'UNKNOWN', '.']:
-                continue
+                # Skip certain entities
+                if entity_text in ['SPEAKER', 'UNKNOWN', '.']:
+                    continue
 
-            events.append((entity_start, 'start_entity', entity_ner_tag))
-            events.append((entity_end, 'end_entity', None))
+                events.append((entity_start, 'start_entity', entity_ner_tag))
+                events.append((entity_end, 'end_entity', None))
         
         ### 2. Collect anchor tag events for TOC ###
         
-        for item in self.summaries:
-            for topic in item['topics']:
-                location = topic.get('location')
-                if location:
-                    for match in re.finditer(re.escape(location), self.text):
-                        start, _ = match.start(), match.end()
-                        anchor_id = f"location_{location.replace(' ', '_')}"
-                        events.append((start, 'insert_anchor', anchor_id))
+        if self.toc:
+            for item in self.toc:
+                for topic in item['topics']:
+                    location = topic.get('location')
+                    if location:
+                        for match in re.finditer(re.escape(location), self.text):
+                            start, _ = match.start(), match.end()
+                            anchor_id = f"location_{location.replace(' ', '_')}"
+                            events.append((start, 'insert_anchor', anchor_id))
         
         ### 3. Match timestamp / speaker patterns of this type: [00:00:06.743] [SPEAKER_09] ###
         

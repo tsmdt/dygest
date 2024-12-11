@@ -269,13 +269,7 @@ HTML_CONTENT = """
                 </div>
                 
             </div>
-            <div class="summaries">
-                <div id="summary-content" style="display: block">
-                    <ol>
-                        <!-- Summary items go here -->
-                    </ol>
-                </div>
-            </div>
+            
         </div>
         
         

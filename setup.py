@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 setup(
     name="dygest",
     author="Thomas Schmidt",
-    version='0.2.1',
+    version='0.3',
     packages=find_packages(),
     license="MIT",
     description="DYGEST: Document Insights Generator",

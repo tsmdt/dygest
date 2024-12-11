@@ -76,7 +76,6 @@ Perform the following tasks on the provided text:
 **Input Text:**
 """
 
-
 CREATE_TOC = """
 Perform the following tasks on the provided list of summaries:
 
@@ -90,28 +89,59 @@ Perform the following tasks on the provided list of summaries:
 **Output Requirements:**
 - **Format:** JSON
 - **Do NOT change the language of the input summaries in any way!**
-- **Strictly adhere to the following template without any modifications or additional content:**
+- **Strictly adhere to the following template and return nothing else:**
 
 [
   {
     "headline": "Headline Name",
     "topics": [
       {
-        "summary": "Provided summary",
-        "location": "Provided location of the summary"
-      },
-      {
-        "summary": "Another summary",
-        "location": "Another location"
+        "summary": "summary",
+        "location": "location"
       }
-      // Additional topics...
     ]
   },
-  // Additional headlines...
 ]
 
 **Input Summaries:**
 """
+
+
+# CREATE_TOC = """
+# Perform the following tasks on the provided list of summaries:
+
+# 1. **Create a Table of Contents (TOC):**
+#    - Group related summaries under concise, relevant headlines.
+#    - Each headline should encapsulate the theme of its grouped topics.
+
+# 2. **Maintain Summary Locations:**
+#    - Do **not** alter the "location" value of any summary.
+
+# **Output Requirements:**
+# - **Format:** JSON
+# - **Do NOT change the language of the input summaries in any way!**
+# - **Strictly adhere to the following template and return nothing else:**
+
+# [
+#   {
+#     "headline": "Headline Name",
+#     "topics": [
+#       {
+#         "summary": "Provided summary",
+#         "location": "Provided location of the summary"
+#       },
+#       {
+#         "summary": "Another summary",
+#         "location": "Another location"
+#       }
+#       // Additional topics...
+#     ]
+#   },
+#   // Additional headlines...
+# ]
+
+# **Input Summaries:**
+# """
 
 
 CREATE_TLDR = """
@@ -126,7 +156,7 @@ Perform the following tasks on the provided text chunk:
    - **Why**: Purpose or reason behind the events.
 3. **Return the results in the language of the Input Text as a plain string.**
 
-**Return only the summary without any additional text.**
+**Return ONLY the summary and add nothing else!**
 
 **Text Chunk:**
 """
@@ -139,7 +169,7 @@ Perform the following tasks on the provided list of summaries:
 2. **Remove similar summaries to ensure the remaining summaries are unique**.
 3. **Return the result in the same language as the input summaries as a plain string**.
 
-**Return only the summary without any additional text.**
+Return **ONLY** the single summary.
 
 **Input Summaries:**
 """

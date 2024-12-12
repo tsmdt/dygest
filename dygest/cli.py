@@ -1,8 +1,9 @@
 import typer
+import json
+from pprint import pprint
 from typing import Optional
 from enum import Enum
 from pathlib import Path
-import json
 
 app = typer.Typer(
     no_args_is_help=True, 
@@ -27,22 +28,67 @@ DEFAULT_CONFIG = {
     'api_base': None,
     'chunk_size': 1000,
     'ner': False,
-    'language': NERlanguages.AUTO,
-    'precise': False
+    'language': NERlanguages.AUTO.value,    # string for JSON compatibility
+    'precise': False,
+    'sleep': 2.5    # to prevent rate limit errors (token per minute)
 }
 
 CONFIG_FILE = Path.cwd() / ".dygest_config.json"
 
 def load_config() -> dict:
+    """
+    Loads the configuration from a JSON file if it exists.
+    Otherwise, returns the default configuration.
+    Converts the 'language' field to the NERlanguages Enum.
+    """
     if CONFIG_FILE.exists():
         with open(CONFIG_FILE, 'r') as f:
-            return json.load(f)
+            config = json.load(f)
+            # Convert 'language' from string to Enum
+            if 'language' in config and isinstance(config['language'], str):
+                try:
+                    config['language'] = NERlanguages(config['language'])
+                except ValueError:
+                    typer.echo(f"... Warning: '{config['language']}' is not a valid NER language. Defaulting to 'auto'.", err=True)
+                    config['language'] = NERlanguages.AUTO
+            else:
+                config['language'] = NERlanguages.AUTO
+            return config
     else:
         return DEFAULT_CONFIG.copy()
 
 def save_config(config: dict):
+    """
+    Saves the configuration to a JSON file.
+    Converts Enum fields to their string values for JSON compatibility.
+    """
+    config_to_save = config.copy()
+    if isinstance(config_to_save.get('language'), Enum):
+        config_to_save['language'] = config_to_save['language'].value
     with open(CONFIG_FILE, 'w') as f:
-        json.dump(config, f, indent=4)
+        json.dump(config_to_save, f, indent=4)
+
+def print_config(config: dict):
+    """
+    Prints the LLM and embedding configuration in a structured format.
+    """
+    formatted_config = {
+        "LLM model": config.get('llm_model') or "None",
+        "Embedding model": config.get('embedding_model') or "None",
+        "Temperature": config.get('temperature', 0.0),
+        "Sleep": f"{config.get('sleep', 0.0)} second(s)",
+        "Chunk size": config.get('chunk_size', 0),
+        "NER": config.get('ner', False),
+        "NER precise": config.get('precise', False),
+        "NER language": config.get(
+            'language'
+            ).value if isinstance(config.get('language'), Enum) else "auto",
+        "API Base": config.get('api_base') or "None",
+    }
+    
+    print("... LLM and embedding configuration:")
+    for key, value in formatted_config.items():
+        print(f"... ... {key}: {value}")
 
 CONFIG = load_config()
 
@@ -50,7 +96,7 @@ def resolve_input_dir(filepath: str = None, output_dir: str = None) -> Path:
     input_path = Path(filepath)
 
     if not input_path.exists():
-        typer.echo(f"Error: The path '{filepath}' does not exist.", err=True)
+        typer.echo(f"... Error: The path '{filepath}' does not exist.", err=True)
         raise typer.Exit(code=1)
 
     if output_dir is None:
@@ -61,7 +107,6 @@ def resolve_input_dir(filepath: str = None, output_dir: str = None) -> Path:
     else:
         resolved_output_dir = Path(output_dir)
     return resolved_output_dir
-
 
 @app.command("config", no_args_is_help=True)
 def configure(
@@ -78,31 +123,36 @@ def configure(
         help="Embedding model name.",
     ),
     temperature: float = typer.Option(
-        0.1,
+        None,
         "--temperature",
         "-t",
         help='Temperature of LLM.',
     ),
+    sleep: float = typer.Option(
+        None,
+        "--sleep",
+        help='Increase this value if you experience rate limit errors (token per minute).',
+    ),
     chunk_size: int = typer.Option(
-        1000,
+        None,
         "--chunk_size",
         "-c",
         help="Maximum number of tokens per chunk."
     ),
     ner: bool = typer.Option(
-        False,
+        None,
         "--ner",
         "-n",
         help="Enable Named Entity Recognition (NER). Defaults to False.",
     ),
     language: NERlanguages = typer.Option(
-        NERlanguages.AUTO,
+        None,
         "--lang",
         "-l",
         help='Language of file(s) for NER. Defaults to auto-detection.',
     ),
     precise: bool = typer.Option(
-        False,
+        None,
         "--precise",
         "-p",
         help="Enable precise mode for NER. Defaults to fast mode.",
@@ -111,33 +161,37 @@ def configure(
         None,
         "--api_base",
         help="Set custom API base url for providers like Ollama and Hugginface."
+    ),
+    show_config: bool = typer.Option(
+        False,
+        "--show_config",
+        "-show",
+        help="Show loaded config parameters.",
     )
 ):
     """
     Configure LLMs, Embeddings and Named Entity Recognition.
     """
     global CONFIG
-    CONFIG['llm_model'] = llm_model
-    CONFIG['embedding_model'] = embedding_model
-    CONFIG['temperature'] = temperature
-    CONFIG['api_base'] = api_base
-    CONFIG['chunk_size'] = chunk_size
-    CONFIG['ner'] = ner
-    CONFIG['language'] = language
-    CONFIG['precise'] = precise
+    CONFIG['llm_model'] = llm_model if llm_model is not None else CONFIG.get('llm_model')
+    CONFIG['embedding_model'] = embedding_model if embedding_model is not None else CONFIG.get('embedding_model')
+    CONFIG['temperature'] = temperature if temperature is not None else CONFIG.get('temperature')
+    CONFIG['sleep'] = sleep if sleep is not None else CONFIG.get('sleep')
+    CONFIG['api_base'] = api_base if api_base is not None else CONFIG.get('api_base')
+    CONFIG['chunk_size'] = chunk_size if chunk_size is not None else CONFIG.get('chunk_size')
+    CONFIG['ner'] = ner if ner is not None else CONFIG.get('ner')
+    CONFIG['language'] = language if language is not None else CONFIG.get('language')
+    CONFIG['precise'] = precise if precise is not None else CONFIG.get('precise')
+
+    if show_config:
+        print_config(CONFIG)
+        return
 
     # Save the updated CONFIG to a file
     save_config(CONFIG)
 
-    print("... LLM and embedding configuration set:")
-    print(f"... ... LLM model: {llm_model if llm_model else 'None'}")
-    print(f"... ... Embedding model: {embedding_model if embedding_model else 'None'}")
-    print(f"... ... Temperature: {temperature}")
-    print(f"... ... Chunk size: {chunk_size}")
-    print(f"... ... NER: {ner if ner else False}")
-    print(f"... ... NER precise: {precise if precise else False}")
-    print(f"... ... NER language: {language if language else 'auto'}")
-    print(f"... ... API Base: {api_base if api_base else 'None'}") 
+    # Print the configuration using the print_config function
+    print_config(CONFIG)
 
 @app.command("run", no_args_is_help=True)
 def main(
@@ -202,6 +256,7 @@ def main(
             llm_model: str = None,
             embedding_model: str = None,
             temperature: float = 0.1,
+            sleep: float = 0,
             chunk_size: int = 1000,
             toc: bool = False,
             summarize: bool = False,
@@ -219,6 +274,7 @@ def main(
             self.ner_tagger = None
             self.token_count = None
             self.temperature = temperature
+            self.sleep = sleep
             self.chunk_size = chunk_size
             self.toc = toc
             self.summarize = summarize
@@ -250,7 +306,8 @@ def main(
                     template='summarize',
                     text_input=chunk,
                     model=self.llm_model,
-                    temperature=self.temperature
+                    temperature=self.temperature,
+                    sleep_time=self.sleep
                 )
 
                 toc_part = utils.validate_summaries(result)
@@ -276,7 +333,8 @@ def main(
                 template='create_toc',
                 text_input=filtered_toc_parts,
                 model=self.llm_model,
-                temperature=self.temperature
+                temperature=self.temperature,
+                sleep_time=self.sleep
             )
             final_toc = utils.validate_summaries(toc)
             return final_toc
@@ -293,7 +351,8 @@ def main(
                     template='create_tldr',
                     text_input=chunk,
                     model=self.llm_model,
-                    temperature=self.temperature
+                    temperature=self.temperature,
+                    sleep_time=self.sleep
                 )
                 tldrs.append(tldr)
                 
@@ -305,7 +364,8 @@ def main(
                     template='combine_tldrs',
                     text_input='\n'.join(tldrs),
                     model=self.llm_model,
-                    temperature=self.temperature
+                    temperature=self.temperature,
+                    sleep_time=self.sleep
                 )
             
             return combined_tldrs
@@ -412,6 +472,7 @@ def main(
         llm_model=CONFIG['llm_model'],
         embedding_model=CONFIG['embedding_model'],
         temperature=CONFIG['temperature'],
+        sleep=CONFIG['sleep'],
         chunk_size=CONFIG['chunk_size'],
         toc=toc,
         summarize=summarize,

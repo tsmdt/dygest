@@ -16,7 +16,6 @@ class SummaryProcessor:
     def __init__(
             self, 
             summaries, 
-            # embedding_service, 
             embedding_model,
             key='topic', 
             threshold=0.8,
@@ -31,7 +30,6 @@ class SummaryProcessor:
             key (str): The key in the dictionary to embed (e.g., 'topic').
             threshold (float): Cosine similarity threshold to consider topics as similar.
         """
-        # self.embedding_service = embedding_service
         self.embedding_model = embedding_model
         self.key = key
         self.threshold = threshold
@@ -48,12 +46,7 @@ class SummaryProcessor:
         """
         for summary in self.summaries:
             text = summary[self.key]
-            # response = self.embedding_service.embed(text, self.embedding_model)
             response = llms.get_embeddings(text, model=self.embedding_model)
-            
-            # print(response)
-            
-            # self.embedded_summaries[text] = np.array(response['embedding'])
             self.embedded_summaries[text] = np.array(response)
 
     @staticmethod

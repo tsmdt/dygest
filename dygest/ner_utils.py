@@ -2,7 +2,6 @@ import re
 import copy
 import time
 
-from tqdm import tqdm
 from flair.nn import Classifier
 from flair.splitter import SegtokSentenceSplitter
 from collections import defaultdict
@@ -96,7 +95,6 @@ def update_entity_positions(
         num_entities = len(entity_list)
         
         if verbose:
-            # Debugging Output
             print(
                 f"... Processing '{text}': {num_matches} matches found, " 
                 f"... {num_entities} entities to update."

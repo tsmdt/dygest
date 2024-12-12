@@ -23,7 +23,8 @@ setup(
         'flair==0.14.0',
         'tqdm==4.66.6',
         'langdetect==1.0.9',
-        'json_repair==0.30.1'
+        'json_repair==0.30.1',
+        'litellm'
     ],
     classifiers=[
         "Programming Language :: Python :: 3",

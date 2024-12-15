@@ -1,0 +1,10 @@
+light_model: ollama/llama3.1:latest
+expert_model: groq/llama-3.3-70b-versatile
+embedding_model: ollama/nomic-embed-text:latest
+temperature: 0.1
+api_base: null
+chunk_size: 250
+ner: true
+language: auto
+precise: false
+sleep: 0.5

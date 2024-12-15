@@ -5,8 +5,8 @@ from litellm import completion, embedding
 from dygest import prompts
 
 PROMPTS = {
-    'summarize': prompts.CREATE_SUMMARIES,
-    'clean_summaries': prompts.CLEAN_SUMMARIES,
+    'get_topics': prompts.GET_TOPICS,
+    # 'clean_topics': prompts.CLEAN_TOPICS,
     'create_toc': prompts.CREATE_TOC,
     'create_tldr': prompts.CREATE_TLDR,
     'combine_tldrs': prompts.COMBINE_TLDRS
@@ -14,7 +14,7 @@ PROMPTS = {
 
 def get_api_base(model_name: str) -> Optional[str]:
     """
-    Determine the api_base URL based on the model's provider using API_BASE_MAPPING.
+    Determine the api_base URL based on the LLM service provider.
     """
     api_base_mappings = {
         'ollama': 'http://localhost:11434'
@@ -64,11 +64,8 @@ def call_llm(
 
     except OpenAIError as e:
         print(f"... An OpenAI API error occurred: {e}")
-        raise e
     except Exception as e:
         print(f"... An unexpected error occurred: {e}")
-        raise e
-
 
 def get_embeddings(
     text: str, 

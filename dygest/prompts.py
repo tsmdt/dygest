@@ -1,73 +1,22 @@
-# 3. **Make sure to capture names, organisations, (historical) events, places or dates** if they are relevant to the topic.
-
-# CREATE_SUMMARIES = """
-# Perform the following tasks on the provided text:
-
-# 1. **Identify the top 2 most important topics** discussed in the text.
-# 2. **For each identified topic**, generate a concise summary using a short phrase that effectively captures the key points related to that topic.
-# 3. **The summary should answer these questions: Who did what when and why?**
-
-# **Return the results in the language of the Input Text as JSON. Do NOT add anything else and use this template without any alterations:**
-
-# [
-#   {
-#     "topic": "Topic Name",
-#     "summary": "A concise phrase related to the topic **in the language of the Input Text**",
-#     "location": "First 5 words of the corresponding text chunk of the Input Text"
-#   },
-#   ...
-# ]
-
-# **Input Text:**
-# """
-
-
-# CREATE_SUMMARIES = """
-# Perform the following tasks on the provided text:
-
-# 1. **Identify the top 2 most important topics** discussed in the text.
-# 2. **For each identified topic**, generate a concise summary that includes key details as a short phrase:
-#    - **Who**: Names of individuals involved.
-#    - **What**: Description of the events or actions.
-#    - **When**: Mentioned dates.
-#    - **Where**: Locations related to the events.
-#    - **Why**: Purpose or reason behind the events.
-# 3. **Ensure the summary answers these questions**: Who did what, when, where, and why.
-
-# **Return the results in the language of the Input Text as JSON. Do NOT add anything else and use this template without any alterations:**
-
-# [
-#   {
-#     "topic": "Topic Name",
-#     "summary": "A concise phrase related to the topic **in the language of the Input Text**",
-#     "location": "First 5 words of the corresponding text chunk of the Input Text"
-#   },
-#   ...
-# ]
-
-# **Input Text:**
-# """
-
-
-CREATE_SUMMARIES = """
+GET_TOPICS = """
 Perform the following tasks on the provided text:
 
 1. **Identify the top 2 most important topics** discussed in the text. 
    - **Each topic name should be a concise, headline-style phrase** (e.g., no more than 5 words) that effectively captures the essence of the topic.
 
-2. **For each identified topic**, generate a concise summary that includes key details as a short phrase:
-   - **Who**: Names of individuals involved.
-   - **What**: Description of the events or actions.
-   - **When**: Mentioned dates.
-   - **Where**: Locations related to the events.
-   - **Why**: Purpose or reason behind the events.
+2. **For each identified topic**, generate a precise, sub-headline (no more than 10 words) that includes key details:
+   - Names of individuals involved.
+   - Description of the events or actions.
+   - Mentioned dates.
+   - Locations related to the events.
+   - Purpose or reason behind the events.
 
-**Return the results in the language of the Input Text as JSON. Do NOT add anything else and use this template without any alterations:**
+Return the results as JSON **IN THE LANGUAGE OF THE INPUT TEXT**. Do NOT add anything else and use this template without any alterations:
 
 [
   {
     "topic": "Concise Subheading",
-    "summary": "A concise phrase related to the topic **in the language of the Input Text**",
+    "summary": "A concise sub-headline-style summary related to the topic **in the language of the Input Text**",
     "location": "First 5 words of the corresponding text chunk of the Input Text"
   },
   ...
@@ -75,6 +24,56 @@ Perform the following tasks on the provided text:
 
 **Input Text:**
 """
+
+# CREATE_SUMMARIES = """
+# Perform the following tasks on the provided text:
+
+# 1. **Identify the top 2 most important topics** discussed in the text. 
+#    - **Each topic name should be a concise, headline-style phrase** (e.g., no more than 5 words) that effectively captures the essence of the topic.
+
+# 2. **For each identified topic**, generate a concise sub-headline-style summary that includes key details:
+#    - **Who**: Names of individuals involved.
+#    - **What**: Description of the events or actions.
+#    - **When**: Mentioned dates.
+#    - **Where**: Locations related to the events.
+#    - **Why**: Purpose or reason behind the events.
+
+# Return the results **in the language of the Input Text as JSON**. Do NOT add anything else and use this template without any alterations:
+
+# [
+#   {
+#     "topic": "Concise Subheading",
+#     "summary": "A concise sub-headline-style summary related to the topic **in the language of the Input Text**",
+#     "location": "First 5 words of the corresponding text chunk of the Input Text"
+#   },
+#   ...
+# ]
+
+# **Input Text:**
+# """
+
+# CLEAN_TOPICS = """
+# Perform the following tasks on the provided list of summaries:
+
+# **Identify overlapping summaries**: Analyze the summaries to find any that heavily overlapping in content or topic.
+# **Remove duplicates**: Remove any overlapping summaries, ensuring that each topic is represented by only one summary.
+# **Return a list of unique summaries**: Provide a new list containing only the unique summaries.
+# **Do NOT change the remaining summaries in any way**
+
+# **Return the results in the language of the Input Summaries as JSON**. **Do NOT add anything else** and use this template without any alterations:
+
+# [
+#   {
+#     "topic": "Topic Name",
+#     "summary": "Input summary",
+#     "location": "Input location of the summary"
+#   },
+#   ...
+# ]
+
+# **Input Summaries:**
+# """
+
 
 CREATE_TOC = """
 Perform the following tasks on the provided list of summaries:
@@ -170,29 +169,6 @@ Perform the following tasks on the provided list of summaries:
 3. **Return the result in the same language as the input summaries as a plain string**.
 
 Return **ONLY** the single summary.
-
-**Input Summaries:**
-"""
-
-
-CLEAN_SUMMARIES = """
-Perform the following tasks on the provided list of summaries:
-
-**Identify overlapping summaries**: Analyze the summaries to find any that heavily overlapping in content or topic.
-**Remove duplicates**: Remove any overlapping summaries, ensuring that each topic is represented by only one summary.
-**Return a list of unique summaries**: Provide a new list containing only the unique summaries.
-**Do NOT change the remaining summaries in any way**
-
-**Return the results in the language of the Input Summaries as JSON**. **Do NOT add anything else** and use this template without any alterations:
-
-[
-  {
-    "topic": "Topic Name",
-    "summary": "Input summary",
-    "location": "Input location of the summary"
-  },
-  ...
-]
 
 **Input Summaries:**
 """

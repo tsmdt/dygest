@@ -269,9 +269,7 @@ HTML_CONTENT = """
                 </div>
                 
             </div>
-            
         </div>
-        
         
         <div class="two-thirds column">
 

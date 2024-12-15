@@ -236,7 +236,7 @@ class HTMLWriter:
                     if location:
                         link_id = f"location_{location.replace(' ', '_')}"
                         link_tag = self.soup.new_tag("a", href=f"#{link_id}")
-                        link_tag.string = f"{topic['summary']}"
+                        link_tag.string = f"{topic['summary'].rstrip('.,;:?!')}"
                         topic_li.append(link_tag)
                     
                     # Append topics to unordered list
@@ -268,15 +268,18 @@ class HTMLWriter:
         
         ### 2. Collect anchor tag events for TOC ###
         
+        inserted_locations = set()
         if self.toc:
             for item in self.toc:
                 for topic in item['topics']:
                     location = topic.get('location')
-                    if location:
+                    if location and location not in inserted_locations:
                         for match in re.finditer(re.escape(location), self.text):
                             start, _ = match.start(), match.end()
                             anchor_id = f"location_{location.replace(' ', '_')}"
                             events.append((start, 'insert_anchor', anchor_id))
+                            inserted_locations.add(location)
+                            break
         
         ### 3. Match timestamp / speaker patterns of this type: [00:00:06.743] [SPEAKER_09] ###
         
@@ -349,8 +352,13 @@ class HTMLWriter:
                 
             elif event_type == 'end_entity':
                 # Close the current entity span
-                spans_stack.pop()
-                current_parent = spans_stack[-1] if spans_stack else p_tag
+                if spans_stack:
+                    spans_stack.pop()
+                    current_parent = spans_stack[-1] if spans_stack else p_tag
+                else:
+                    print(f'span_stack pop Error for event: {event}')
+                    current_parent = spans_stack[-1] if spans_stack else p_tag
+                
                 
             elif event_type == 'insert_anchor':
                 # Close any open spans before ending the paragraph

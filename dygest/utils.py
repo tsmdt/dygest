@@ -3,118 +3,31 @@ import re
 import codecs
 import tiktoken
 import json_repair
-import numpy as np
 
-from itertools import combinations
 from flair.splitter import SegtokSentenceSplitter
 from typing import Optional
 from pathlib import Path
-from dygest import llms
 
 
-class SummaryProcessor:
-    def __init__(
-            self, 
-            summaries, 
-            embedding_model,
-            key='topic', 
-            threshold=0.8,
-            verbose=False
-            ):
-        """
-        Initialize the SummaryProcessor and process the summaries.
+def resolve_input_dir(filepath: str = None, output_dir: str = None) -> Path:
+    """
+    Resolve a filepath (file or folder).
+    """
+    input_path = Path(filepath)
 
-        Args:
-            summaries (list[dict]): List of summary dictionaries.
-            embedding_model (str): The name of the embedding model to use.
-            key (str): The key in the dictionary to embed (e.g., 'topic').
-            threshold (float): Cosine similarity threshold to consider topics as similar.
-        """
-        self.embedding_model = embedding_model
-        self.key = key
-        self.threshold = threshold
-        self.summaries = summaries
-        self.embedded_summaries = {}
-        self.filtered_summaries = []
-        self.verbose = verbose        
+    if not input_path.exists():
+        print(f"... Error: The path '{filepath}' does not exist.")
+        return
 
-    def embed_summaries(self):
-        """
-        Embed summaries with Ollama embeddings.
-
-        Populates the `embedded_summaries` dictionary.
-        """
-        for summary in self.summaries:
-            text = summary[self.key]
-            response = llms.get_embeddings(text, model=self.embedding_model)
-            self.embedded_summaries[text] = np.array(response)
-
-    @staticmethod
-    def cosine_similarity(vec1, vec2):
-        """
-        Calculate the cosine similarity between two vectors.
-
-        Args:
-            vec1 (np.array): First embedding vector.
-            vec2 (np.array): Second embedding vector.
-
-        Returns:
-            float: Cosine similarity score.
-        """
-        dot_product = np.dot(vec1, vec2)
-        norm_vec1 = np.linalg.norm(vec1)
-        norm_vec2 = np.linalg.norm(vec2)
-        if norm_vec1 == 0 or norm_vec2 == 0:
-            return 0.0
-        return dot_product / (norm_vec1 * norm_vec2)
-
-    def remove_similar_summaries(self):
-        """
-        Remove similar summaries based on cosine similarity of their topics.
-
-        Returns:
-            list[dict]: Filtered list of summaries with similar topics removed.
-        """
-        similar_topics = []
-
-        # Generate all unique pairs of topics
-        for (topic1, emb1), (topic2, emb2) in combinations(self.embedded_summaries.items(), 2):
-            similarity = self.cosine_similarity(emb1, emb2)
-            if similarity >= self.threshold:
-                similar_topics.append({
-                    'topic_1': topic1,
-                    'topic_2': topic2,
-                    'similarity_score': similarity
-                })
-
-        # Identify Topics to Remove (topic_2 in each similar pair)
-        topics_to_remove = set(pair['topic_2'] for pair in similar_topics)
-
-        # Filter Out Summaries with Topics to Remove
-        filtered_summaries = [summary for summary in self.summaries if summary[self.key] not in topics_to_remove]
-
-        # Display Similar Topics Identified
-        if self.verbose:
-            if similar_topics:
-                print("... Similar Topics Identified:")
-                for pair in similar_topics:
-                    print(f"... '{pair['topic_1']}' <--> '{pair['topic_2']}' with similarity score of {pair['similarity_score']:.4f}")
-            else:
-                print("... No similar topics found above the threshold.")
-
-        return filtered_summaries
-
-    def get_filtered_summaries(self):
-        """
-        Get the filtered summaries.
-
-        Returns:
-            list[dict]: Filtered summaries.
-        """
-        self.embed_summaries()
-        self.filtered_summaries = self.remove_similar_summaries()
-        return self.filtered_summaries
-
+    if output_dir is None:
+        if input_path.is_dir():
+            resolved_output_dir = input_path
+        else:
+            resolved_output_dir = input_path.parent
+    else:
+        resolved_output_dir = Path(output_dir)
+        
+    return resolved_output_dir
 
 def load_filepath(filepath: str) -> list[Path]:
     """
@@ -143,7 +56,7 @@ def load_txt_file(file_path: str) -> str:
 def remove_hyphens(text: str) -> str:
     return re.sub(r'[=-⸗–]\n', '', text)
 
-def chunk_text(text: str, chunk_size: int = 4000) -> tuple[list[str], int]:
+def chunk_text(text: str, chunk_size: int = 1000) -> tuple[list[str], int]:
     """
     Chunks string by max_tokens and returns text_chunks and token count.
     """

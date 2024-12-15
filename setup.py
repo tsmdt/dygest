@@ -14,17 +14,14 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/tsmdt/dygest",
     install_requires=[
-        'typer==0.12.5',
+        'typer==0.15.1',
         'tiktoken==0.8.0',
         'beautifulsoup4==4.12.3',
-        'groq==0.11.0',
-        'openai==1.54.3',
-        'ollama==0.3.3',
         'flair==0.14.0',
-        'tqdm==4.66.6',
+        'tqdm==4.67.1',
         'langdetect==1.0.9',
-        'json_repair==0.30.1',
-        'litellm'
+        'json_repair==0.31.0',
+        'litellm==1.54.1'
     ],
     classifiers=[
         "Programming Language :: Python :: 3",

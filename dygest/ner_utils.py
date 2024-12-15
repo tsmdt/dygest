@@ -2,9 +2,21 @@ import re
 import copy
 import time
 
+from enum import Enum
 from flair.nn import Classifier
 from flair.splitter import SegtokSentenceSplitter
 from collections import defaultdict
+
+
+class NERlanguages(str, Enum):
+    AUTO = 'auto'
+    AR = 'ar'
+    DE = 'de'
+    DA = 'da'
+    EN = 'en'
+    FR = 'fr'
+    ES = 'es'
+    NL = 'nl'
 
 
 def load_tagger(language: str = 'en', precise: bool = False) -> Classifier:

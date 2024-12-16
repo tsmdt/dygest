@@ -27,56 +27,6 @@ Return the results as JSON **IN THE LANGUAGE OF THE INPUT TEXT**. Do NOT add any
 **Input Text:**
 """
 
-# CREATE_SUMMARIES = """
-# Perform the following tasks on the provided text:
-
-# 1. **Identify the top 2 most important topics** discussed in the text. 
-#    - **Each topic name should be a concise, headline-style phrase** (e.g., no more than 5 words) that effectively captures the essence of the topic.
-
-# 2. **For each identified topic**, generate a concise sub-headline-style summary that includes key details:
-#    - **Who**: Names of individuals involved.
-#    - **What**: Description of the events or actions.
-#    - **When**: Mentioned dates.
-#    - **Where**: Locations related to the events.
-#    - **Why**: Purpose or reason behind the events.
-
-# Return the results **in the language of the Input Text as JSON**. Do NOT add anything else and use this template without any alterations:
-
-# [
-#   {
-#     "topic": "Concise Subheading",
-#     "summary": "A concise sub-headline-style summary related to the topic **in the language of the Input Text**",
-#     "location": "First 5 words of the corresponding text chunk of the Input Text"
-#   },
-#   ...
-# ]
-
-# **Input Text:**
-# """
-
-# CLEAN_TOPICS = """
-# Perform the following tasks on the provided list of summaries:
-
-# **Identify overlapping summaries**: Analyze the summaries to find any that heavily overlapping in content or topic.
-# **Remove duplicates**: Remove any overlapping summaries, ensuring that each topic is represented by only one summary.
-# **Return a list of unique summaries**: Provide a new list containing only the unique summaries.
-# **Do NOT change the remaining summaries in any way**
-
-# **Return the results in the language of the Input Summaries as JSON**. **Do NOT add anything else** and use this template without any alterations:
-
-# [
-#   {
-#     "topic": "Topic Name",
-#     "summary": "Input summary",
-#     "location": "Input location of the summary"
-#   },
-#   ...
-# ]
-
-# **Input Summaries:**
-# """
-
-
 CREATE_TOC = """
 Perform the following tasks on the provided list of summaries:
 
@@ -107,43 +57,6 @@ Perform the following tasks on the provided list of summaries:
 **Input Summaries:**
 """
 
-
-# CREATE_TOC = """
-# Perform the following tasks on the provided list of summaries:
-
-# 1. **Create a Table of Contents (TOC):**
-#    - Group related summaries under concise, relevant headlines.
-#    - Each headline should encapsulate the theme of its grouped topics.
-
-# 2. **Maintain Summary Locations:**
-#    - Do **not** alter the "location" value of any summary.
-
-# **Output Requirements:**
-# - **Format:** JSON
-# - **Do NOT change the language of the input summaries in any way!**
-# - **Strictly adhere to the following template and return nothing else:**
-
-# [
-#   {
-#     "headline": "Headline Name",
-#     "topics": [
-#       {
-#         "summary": "Provided summary",
-#         "location": "Provided location of the summary"
-#       },
-#       {
-#         "summary": "Another summary",
-#         "location": "Another location"
-#       }
-#       // Additional topics...
-#     ]
-#   },
-#   // Additional headlines...
-# ]
-
-# **Input Summaries:**
-# """
-
 ### SUMMARY CREATION ###
 
 CREATE_TLDR = """
@@ -163,7 +76,6 @@ Perform the following tasks on the provided text chunk:
 **Text Chunk:**
 """
 
-
 COMBINE_TLDRS = """
 Perform the following tasks on the provided list of summaries:
 
@@ -177,22 +89,6 @@ Return **ONLY** the single summary.
 """
 
 ### KEYWORD CREATION ###
-
-# GET_KEYWORDS = """
-# Perform the following task on the provided text chunk:
-
-# 1. Generate max. 2 keywords that **most accuratly describe the content** for the provided text chunk.
-# 2. **The keywords should be**:
-#    - rather **abstract** (capturing concepts) than **detailed** (capturing specific information)
-#    - **Accurate**
-#    - **Informative**
-# 3. Return the keywords **IN THE LANGUAGE OF THE INPUT TEXT** as a plain string, divided by comma 
-# (e.g. "research data, NFDI").
-
-# **Return ONLY the string and add nothing else!**
-
-# **Text Chunk:**
-# """
 
 GENERATE_KEYWORDS = """
 Analyze the following text chunk and generate a set of broad, high-level keywords that capture the main topics and themes of the content.
@@ -208,17 +104,3 @@ Return **ONLY the comma-separated keywords** and **nothing else**.
 
 **Text Chunk:**
 """
-
-# GENERATE_KEYWORDS = """
-# Analyze the following text chunk and generate keywords that best represent its content.
-
-# Requirements:
-# 1. Keywords should be abstract concepts rather than specific details.
-# 2. Ensure keywords are accurate and informative.
-# 3. Provide keywords **IN THE SAME LANGUAGE** as the input text.
-# 4. Return the keywords as a plain string, separated by commas.
-
-# **Return ONLY the comma-separated keywords and nothing else.**
-
-# **Text Chunk:**
-# """

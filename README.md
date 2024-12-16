@@ -11,13 +11,15 @@
 - **Unified LLM Interface**  
   dygest uses [litellm](https://github.com/BerriAI/litellm) and provides integration for various LLM service providers: `OpenAI`, `Anthropic`, `HuggingFace`, `Groq`, `Ollama` etc. Check the [complete provider list](https://docs.litellm.ai/docs/providers) for all available services. 
 - **Token Friendly**  
-  dygest performs token heavy text analysis and summarization tasks. Thats why the underlying LLM pipeline can be catered to your needs and specific rate limits using a *mixed experts approach*.
+  dygest performs token-heavy text analysis and summarization tasks. Therefore, the underlying LLM pipeline can be tailored to your needs and specific rate limits using a *mixed experts approach*.
 - **Mixed Experts Approach**  
-  Dygest utilizes two fully customizable LLMs to handle different processing tasks. The first, referred to as the `light_model`, is designed for lighter tasks such as summarization and keyword extraction. The second, called the `expert_model`, is optimized for more complex tasks like constructing Tables of Contents (TOCs).  
+  dygest utilizes two fully customizable LLMs to handle different processing tasks. The first, referred to as the `light_model`, is designed for lighter tasks such as summarization and keyword extraction. The second, called the `expert_model`, is optimized for more complex tasks like constructing Tables of Contents (TOCs).  
 
   This flexibility allows for various pipeline configurations. For example, the `light_model` can run locally using `Ollama`, while the `expert_model` can leverage an external API service like `OpenAI` or `Groq`. This approach ensures efficiency and adaptability based on specific requirements.
 
-  [!TIP] As the `expert_model` is dealing with a lot of input content it is recommended to use a larger LLM (`>=32B`) for this task. Smaller LLMs (`3B` to `7B`) perform well as `light_model`.
+> [!TIP]
+> As the `expert_model` is dealing with a lot of input content it is recommended to use a larger LLM (`>=32B`) for this task. Smaller LLMs (`3B` to `7B`) perform well as `light_model`.
+
 - **Named Entity Recognition (NER)**  
   Named Entity Recognition via fast and reliable `flair` framework (identifies persons, organisations, locations etc.).
 - **User-friendly HTML Editor**  
@@ -33,7 +35,8 @@
 - 🐍 Python `>=3.10` 
 - 🔑 API Keys for LLM services like `OpenAI`, `Anthropic` and `Groq` *and / or* a running `Ollama` instance
 
-> [!NOTE] API Keys have to be stored in your environment (e.g. `export $OPENAI_API_KEY=skj....`)
+> [!NOTE]
+> API Keys have to be stored in your environment (e.g. `export $OPENAI_API_KEY=skj....`)
 
 ## Installation
 

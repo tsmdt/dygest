@@ -1,16 +1,10 @@
 import time
+import typer
+from rich import print
 from typing import Optional
 from openai import OpenAIError
-from litellm import completion, embedding
-from dygest import prompts
+from litellm import completion, embedding, BadRequestError
 
-PROMPTS = {
-    'get_topics': prompts.GET_TOPICS,
-    # 'clean_topics': prompts.CLEAN_TOPICS,
-    'create_toc': prompts.CREATE_TOC,
-    'create_tldr': prompts.CREATE_TLDR,
-    'combine_tldrs': prompts.COMBINE_TLDRS
-}
 
 def get_api_base(model_name: str) -> Optional[str]:
     """
@@ -33,7 +27,7 @@ def call_llm(
     ):
     """
     Call an LLM using litellm's completion function.
-    Just set the environment variable for the chosen provider's API key.
+    Note: Set the environment variable for the chosen provider's API key.
     
     Parameters:
     - template: The prompt template key (e.g., 'summarize')
@@ -42,8 +36,7 @@ def call_llm(
     - temperature: The LLM sampling temperature
     - api_base: Optional API base URL for some models (like Ollama or custom Hugging Face endpoints)
     """
-    template_text = PROMPTS.get(template, '')
-    messages = [{"role": "user", "content": f"{template_text} {text_input}"}]
+    messages = [{"role": "user", "content": f"{template} {text_input}"}]
 
     if not api_base:
         api_base = get_api_base(model)
@@ -62,10 +55,16 @@ def call_llm(
         
         return response.choices[0].message.content
 
+    except BadRequestError as e:
+        print(f"[purple] ...  Error: Please configure the model(s) your are using with the \
+correct LLM provider (e.g. 'ollama/llama3.1:latest', 'openai/gpt-4o-mini).")
+        raise typer.Exit(code=1) 
     except OpenAIError as e:
-        print(f"... An OpenAI API error occurred: {e}")
+        print(f"[purple] ... Error: {e}")
+        raise typer.Exit(code=1) 
     except Exception as e:
-        print(f"... An unexpected error occurred: {e}")
+        print(f"[purple] ... An unexpected error occurred: {e}")
+        raise typer.Exit(code=1) 
 
 def get_embeddings(
     text: str, 
@@ -96,6 +95,8 @@ def get_embeddings(
         return response.data[0]['embedding']
     
     except OpenAIError as e:
-        print(f"... An OpenAI API error occurred: {e}")
+        print(f"[purple] ... An OpenAI API error occurred: {e}")
+        raise typer.Exit(code=1) 
     except Exception as e:
-        print(f"... An unexpected error occurred: {e}")
+        print(f"[purple] ... An unexpected error occurred: {e}")
+        raise typer.Exit(code=1) 

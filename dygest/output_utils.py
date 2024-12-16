@@ -1,4 +1,8 @@
 import re
+import csv
+import json
+from enum import Enum
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from collections import Counter
@@ -16,41 +20,42 @@ CATEGORY_COLORS = {
     'MISC': '#ff8222',
 }
 
-def get_translation(key, language_code, default_language='en'):
-    translations = UI_TRANSLATIONS.get(key, {})
-    return translations.get(language_code, translations.get(default_language, ''))
+
+class ExportFormats(str, Enum):
+    JSON = 'json'
+    CSV = 'csv'
+    HTML = 'html'
 
 
-class HTMLWriter:
-    def __init__(self,
-            filename: Path, 
-            output_filepath: Path,
-            text: str, 
-            named_entities: list, 
-            toc: list[dict],
-            tldrs: str,
-            language: str,
-            model: str,
-            mode: str,
-            token_count: int,
-            export_metadata: bool
-            ):
-        self.filename = filename
-        self.output_filepath = output_filepath
-        self.text = text
-        self.named_entities = named_entities
-        self.toc = toc
-        self.tldrs = tldrs
-        self.language = language
-        self.model = model
-        self.mode = mode
-        self.token_count = token_count
-        self.export_metadata = export_metadata
-        # HTML template
-        self.soup = BeautifulSoup(templates.HTML_CONTENT, "html.parser")
-        self.has_speaker = False
+@dataclass
+class WriterBase:
+    filename: Path
+    output_filepath: Path
+    input_text: str
+    chunk_size: int
+    named_entities: list
+    toc: list[dict]
+    summary: str
+    keywords: list[str]
+    language: str
+    light_model: str
+    expert_model: str
+    token_count: int
 
-    def write_html(self):
+
+@dataclass
+class HTMLWriter(WriterBase):
+    """
+    Class for writing HTML output.
+    """
+    export_metadata: bool = field(default=None, init=True)
+
+    # HTML template
+    has_speaker: bool = field(default=False, init=True)
+    soup = BeautifulSoup(templates.HTML_CONTENT, "html.parser")
+    has_speaker = False
+
+    def write(self):
         """
         Builds and saves a HTML page with LLM summaries and Named Entities.
         """
@@ -66,6 +71,13 @@ class HTMLWriter:
         # Save HTML to disk
         self.save_html()
 
+    def format_metadata_entry(self, parent, label, value):
+        span_tag = self.soup.new_tag('span')
+        span_tag.string = f"{label}: {value}"
+        br_tag = self.soup.new_tag('br')
+        parent.append(span_tag)
+        parent.append(br_tag)
+
     def add_metadata_to_html(self):
         """
         Adds metadata to HTML page.
@@ -77,36 +89,51 @@ class HTMLWriter:
             if h6_tag:
                 h6_tag.string = f'{self.filename}'
             
-            # Add model
+            # Add and format metadata
             if self.export_metadata:
                 div_metadata_content = self.soup.find('div', class_='metadata-content')
                 if div_metadata_content:
-                    llm_service_tag = self.soup.new_tag('span')
-                    llm_service_tag.string = f"Created with {self.model}"
-                    div_metadata_content.append(llm_service_tag)
-                    
-                    br_tag = self.soup.new_tag('br')
-                    div_metadata_content.append(br_tag)
+                    # Light LLM
+                    self.format_metadata_entry(
+                        parent=div_metadata_content, 
+                        label="Light LLM (light_model)", 
+                        value=self.light_model
+                    )
+                    # Expert LLM
+                    self.format_metadata_entry(
+                        parent=div_metadata_content,
+                        label="Expert LLM (expert_model)", 
+                        value=self.expert_model
+                    )
+                    # Chunk size
+                    self.format_metadata_entry(
+                        parent=div_metadata_content, 
+                        label="Chunk size", 
+                        value=self.chunk_size
+                    )
+                    # Datetime
+                    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    self.format_metadata_entry(
+                        parent=div_metadata_content,
+                        label="Date",
+                        value=current_time
+                    )
+                    # Token count
+                    token_count = f"{self.token_count:,.0f}".replace(',', '.')
+                    self.format_metadata_entry(
+                        parent=div_metadata_content, 
+                        label="Tokens",
+                        value=token_count
+                    )
 
-                    processing_timestamp_tag = self.soup.new_tag('span')
-                    processing_timestamp_tag.string = f"Date: {str(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}"
-                    div_metadata_content.append(processing_timestamp_tag)
-
-                    br_tag = self.soup.new_tag('br')
-                    div_metadata_content.append(br_tag)
-
-                    token_count_tag = self.soup.new_tag('span')
-                    token_count_tag.string = f"Tokens: {self.token_count:,.0f}".replace(',', '.')
-                    div_metadata_content.append(token_count_tag)
-
-                    br_tag = self.soup.new_tag('br')
-                    div_metadata_content.append(br_tag)
-
-                    entity_count_tag = self.soup.new_tag('span')
-                    ner_count = Counter([x['ner_tag'] for x in self.named_entities])
-                    ner_string = f"{len(self.named_entities)} {list(ner_count.items())}"
-                    entity_count_tag.string = f"Entities: {ner_string}"
-                    div_metadata_content.append(entity_count_tag)
+                    if self.named_entities:
+                        ner_count = Counter([x['ner_tag'] for x in self.named_entities])
+                        ner_string = f"{len(self.named_entities)} {list(ner_count.items())}"
+                        self.format_metadata_entry(
+                            parent=div_metadata_content,
+                            label="Entities",
+                            value=ner_string
+                        )
 
     def add_controls(self):
         # Append additional button controls to HTML
@@ -172,17 +199,62 @@ class HTMLWriter:
         """
         Appends main content blocks to a default HTML template.
         """
-        # Add TL;DR
-        if self.tldrs:
+        # Add summary / TL;DR
+        if self.summary:
             div_tldr = self.soup.find('div', class_='tldr')
-            if div_tldr:                
-                summary_tag = self.soup.new_tag(
-                    'span',
-                    attrs={
-                        'class': 'tldr-content'
-                    })
-                summary_tag.string = self.tldrs.strip()
-                div_tldr.append(summary_tag)
+            if div_tldr:
+                # Create new div element
+                div_summary = self.soup.new_tag(
+                    'div',
+                    attrs={'class': 'tldr-content'}
+                )
+
+                # Add title tag
+                title_tag = self.soup.new_tag('span')
+                title_tag.string = get_translation(
+                    key="summary",
+                    language_code=self.language
+                )       
+
+                # Add summary
+                summary_tag = self.soup.new_tag('span')
+                summary_tag.string = self.summary.strip()
+
+                # Append new tags
+                div_summary.append(title_tag)
+                div_summary.append(summary_tag)
+                div_tldr.append(div_summary)
+
+        # Add keywords
+        if self.keywords:
+            div_tldr = self.soup.find('div', class_='tldr')
+            if div_tldr:
+                # Create new div element
+                div_keywords = self.soup.new_tag(
+                    'div',
+                    attrs={'class': 'tldr-keywords'}
+                )
+
+                # Add title tag
+                title_tag = self.soup.new_tag('span')
+                title_tag.string = get_translation(
+                    key="keywords",
+                    language_code=self.language
+                )       
+
+                # Add keywords string
+                keywords_tag = self.soup.new_tag('span')
+                keywords_tag.string = (
+                    ', '.join(
+                        [key if key.isupper() else key.title() for key in self.keywords]
+                        )
+                    )
+
+                # Append new tags
+                div_keywords.append(title_tag)
+                div_keywords.append(keywords_tag)
+                div_tldr.append(div_keywords)
+
         
         # Add TOC heading
         if self.toc:
@@ -274,7 +346,7 @@ class HTMLWriter:
                 for topic in item['topics']:
                     location = topic.get('location')
                     if location and location not in inserted_locations:
-                        for match in re.finditer(re.escape(location), self.text):
+                        for match in re.finditer(re.escape(location), self.input_text):
                             start, _ = match.start(), match.end()
                             anchor_id = f"location_{location.replace(' ', '_')}"
                             events.append((start, 'insert_anchor', anchor_id))
@@ -285,7 +357,7 @@ class HTMLWriter:
         
         pattern = r'\[\d{2}:\d{2}:\d{2}\.\d{3}\] \[(?:SPEAKER_\d+|UNKNOWN)\]|\[(?:SPEAKER_\d+|UNKNOWN)\]'
         
-        for match in re.finditer(pattern, self.text):
+        for match in re.finditer(pattern, self.input_text):
             start, end = match.start(), match.end()
             events.append((start, 'insert_linebreak', None))
             events.append((start, 'start_speaker', None))
@@ -316,7 +388,7 @@ class HTMLWriter:
             
             # Add text up to the event position
             if position < event_position:
-                text_segment = self.text[position:event_position]
+                text_segment = self.input_text[position:event_position]
                 current_parent.append(text_segment)
             position = event_position
             
@@ -424,8 +496,8 @@ class HTMLWriter:
                 current_parent = spans_stack[-1] if spans_stack else p_tag
         
         # Add any remaining text after the last event
-        if position < len(self.text):
-            text_segment = self.text[position:]
+        if position < len(self.input_text):
+            text_segment = self.input_text[position:]
             current_parent.append(text_segment)
         
         # Add the last paragraph to the content if it has any children
@@ -441,9 +513,134 @@ class HTMLWriter:
         # Ensure readability of HTML
         self.soup.prettify(formatter='html')
 
-    
     def save_html(self):
         with open(self.output_filepath, 'w', encoding='utf-8') as fout:
             fout.write(str(self.soup))
         print(f"... 🌞 Saved {self.output_filepath}.")
+
+
+@dataclass
+class CSVWriter(WriterBase):
+    """
+    Class for writing CSV output.
+    """
+    def write(self):
+        with open(self.output_filepath, 'w', encoding='utf-8') as fout:
+            csv_header = [
+                'filename',
+                'output_filepath',
+                'input_text',
+                'language',
+                'chunk_size',
+                'token_count',
+                'light_model',
+                'expert_model',
+                'summary' if self.summary else None,
+                'keywords' if self.keywords else None,
+                'toc' if self.toc else None
+            ]
+            writer = csv.writer(fout)
+            writer.writerow(csv_header)
+            writer.writerow(
+                [
+                    self.filename,
+                    self.output_filepath,
+                    self.input_text,
+                    self.language,
+                    self.chunk_size,
+                    self.token_count,
+                    self.light_model,
+                    self.expert_model,
+                    self.summary if self.summary else None,
+                    self.keywords if self.keywords else None,
+                    self.toc if self.toc else None
+                ]
+            )
+        print(f"... 🌞 Saved {self.output_filepath}.")
+
+
+@dataclass
+class JSONWriter(WriterBase):
+    """
+    Class for writing JSON output.
+    """
+    def write(self):
+        with open(str(self.output_filepath), 'w', encoding='utf-8') as fout:
+            json_dict = {
+                'filename': self.filename,
+                'output_filepath': str(self.output_filepath),
+                'input_text': self.input_text,
+                'language': self.language,
+                'chunk_size': self.chunk_size,
+                'token_count': self.token_count,
+                'light_model': self.light_model,
+                'expert_model': self.expert_model,
+                'summary': self.summary if self.summary else None,
+                'keywords': self.keywords if self.keywords else None,
+                'toc': self.toc if self.toc else None
+            }
+            json.dump(json_dict, fout, indent=4)
+        print(f"... 🌞 Saved {self.output_filepath}.")
+
+
+def get_writer(proc):
+    """
+    Instantiates and returns the appropriate writer Class based on 
+    proc.export_format, including shared and format-specific parameters.
+    """
+    def html_specific_params(proc):
+        return {'export_metadata': proc.export_metadata} if proc.export_metadata else {}
     
+    def csv_specific_params(proc):
+        return {}
+    
+    def json_specific_params(proc):
+        return {}
+    
+    # Map ExportFormats to (WriterClass, specific_params_function)
+    writer_mapping = {
+        ExportFormats.HTML: (HTMLWriter, html_specific_params),
+        ExportFormats.CSV: (CSVWriter, csv_specific_params),
+        ExportFormats.JSON: (JSONWriter, json_specific_params)
+    }
+
+    # Retrieve writer_class and specific params function based on export_format
+    writer_entry = writer_mapping.get(proc.export_format)
+    if not writer_entry:
+        raise ValueError(f"... Unknown export format: {proc.export_format}")
+
+    writer_class, specific_params_func = writer_entry
+
+    # Shared params for all writer classes
+    shared_params = {
+        'filename': proc.filename,
+        'input_text': proc.text,
+        'chunk_size': proc.chunk_size,
+        'named_entities': proc.entities if proc.add_ner else None,
+        'toc': proc.toc if proc.add_toc else None,
+        'summary': proc.summaries if proc.add_summaries else None,
+        'keywords': proc.keywords if proc.add_keywords else None,
+        'language': proc.language if proc.add_ner else None,
+        'light_model': proc.light_model,
+        'expert_model': proc.expert_model,
+        'token_count': proc.token_count
+    }
+
+    # Get file suffix based on export_format
+    suffix = proc.export_format.value.lower()
+    output_filepath = proc.output_filepath.with_suffix(f'.{suffix}')
+    shared_params['output_filepath'] = output_filepath
+
+    # Get specific params and merge them
+    specific_params = specific_params_func(proc)
+    specific_params = {k: v for k, v in specific_params.items() if v is not None}
+    writer_params = {**shared_params, **specific_params}
+
+    # Return the writer
+    return writer_class(**writer_params)
+
+def get_translation(key, language_code, default_language='en'):
+    translations = UI_TRANSLATIONS.get(key, {})
+    return translations.get(
+        language_code, translations.get(default_language, '')
+        )

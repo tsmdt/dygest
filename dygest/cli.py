@@ -1,6 +1,7 @@
 import typer
 from typing import Optional
 from pathlib import Path
+from dygest.output_utils import ExportFormats
 from dygest.config import CONFIG
 
 app = typer.Typer(
@@ -38,7 +39,7 @@ def configure(
         None,
         "--sleep",
         "-s",
-        help='Increase this value if you experience rate limit errors (tokens per minute).',
+        help='Pause LLM requests to prevent rate limit errors (in seconds).',
     ),
     chunk_size: int = typer.Option(
         None,
@@ -54,7 +55,6 @@ def configure(
     precise: Optional[bool] = typer.Option(
         None,
         "--precise/--fast",
-        "-p",
         help="Enable precise mode for NER. Defaults to fast mode.",
     ),
     language: str = typer.Option(
@@ -66,6 +66,7 @@ def configure(
     api_base: str = typer.Option(
         None,
         "--api_base",
+        '-api',
         help="Set custom API base url for providers like Ollama and Hugginface."
     ),
     view_config: bool = typer.Option(
@@ -125,6 +126,12 @@ def main(
         "-o",
         help="If not provided, outputs will be saved in the input folder.",
     ),
+    export_format: Optional[ExportFormats] = typer.Option(
+        ExportFormats.HTML,
+        "--export_format",
+        "-ex",
+        help="Set the data format for exporting.",
+    ),
     toc: bool = typer.Option(
         False,
         "--toc",
@@ -136,6 +143,12 @@ def main(
         "--summarize",
         "-s",
         help="Include a short summary for the whole text. Defaults to False.",
+    ),
+    keywords: bool = typer.Option(
+        False,
+        "--keywords",
+        "-k",
+        help="Create descriptive keywords for the text. Defaults to False.",
     ),
     sim_threshold: float = typer.Option(
         0.85,
@@ -181,34 +194,32 @@ def main(
         chunk_size=CONFIG['chunk_size'],
         add_toc=toc,
         add_summaries=summarize,
+        add_keywords=keywords,
         add_ner=CONFIG['ner'],
         sim_threshold=sim_threshold,
         provided_language=CONFIG['language'],
         precise=CONFIG['precise'],
         verbose=verbose,
-        export_metadata=export_metadata
+        export_metadata=export_metadata,
+        export_format=export_format
     )
         
-    # Process the files
     for file in proc.files_to_process:
+        # Process each file
         proc.process_file(file)
-    
-        # Write Output
-        print(f'... Writing HTML')
-        html_writer = output_utils.HTMLWriter(
-            filename=proc.filename,
-            output_filepath=proc.output_filepath.with_suffix('.html'),
-            text=proc.text,
-            named_entities=proc.entities if proc.add_ner else None,
-            toc=proc.toc if proc.add_toc else None,
-            tldrs=proc.summaries if proc.add_summaries else None,
-            language=proc.language if proc.add_ner else None,
-            model=proc.expert_model,
-            mode='create_toc',
-            token_count=proc.token_count,
-            export_metadata=proc.export_metadata
-        )
-        html_writer.write_html()
+
+        # Write output
+        try:
+            writer = output_utils.get_writer(proc)
+            print(f'... Writing {proc.export_format.name.upper()}')
+
+            write_method = getattr(writer, 'write', None)
+            write_method()
+        
+        except ValueError as ve:
+            print(f'... {ve}')
+        except Exception as e:
+            print(f'... An unexpected error occurred: {e}')
 
 if __name__ == '__main__':
     app()

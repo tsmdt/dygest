@@ -1,10 +1,7 @@
 import json
 import re
-import codecs
-import tiktoken
 import json_repair
 
-from flair.splitter import SegtokSentenceSplitter
 from typing import Optional
 from pathlib import Path
 
@@ -50,16 +47,27 @@ def load_txt_file(file_path: str) -> str:
     """
     Load files but omit Byte Order Marks (BOM) at start of the string.
     """
+    import codecs
+
     with codecs.open(file_path, 'r', encoding='utf-8-sig') as file:
         return file.read().strip()
     
 def remove_hyphens(text: str) -> str:
     return re.sub(r'[=-⸗–]\n', '', text)
 
+def remove_punctuation(text: str) -> str:
+    return re.sub(r'[^\w\s]', '', text)
+
+def replace_underscores_with_whitespace(text: str) -> str:
+    return re.sub(r'_', ' ', text)
+
 def chunk_text(text: str, chunk_size: int = 1000) -> tuple[list[str], int]:
     """
     Chunks string by max_tokens and returns text_chunks and token count.
     """
+    import tiktoken
+    from flair.splitter import SegtokSentenceSplitter
+
     tokenizer = tiktoken.get_encoding("gpt2") 
     
     token_count = 0

@@ -150,7 +150,7 @@ HTML_CONTENT = """
     .additional-controls {
         display: inline-block;
         width: auto;
-        margin: 5px 2px;
+        margin-bottom: 15px;
     }
 
     h5 {
@@ -182,6 +182,7 @@ HTML_CONTENT = """
         display: block;
         opacity: 1;
         max-height: 500px; 
+        margin-bottom: 20px;
     }
 
     .ner-entity {
@@ -211,16 +212,25 @@ HTML_CONTENT = """
     }
 
     .tldr {
-        color: #666666;
-        font-family: monospace;
-        margin-left: 10px;
         margin-bottom: 15px;
+        font-size: 15px;
+        padding: 15px;
+        border: solid 2px #e5e5e5;
+        border-radius: 10px;
+        cursor: pointer;
+    }
+
+    .tldr-content {
+        color: brown;
         font-family: monospace;
         font-size: 15px;
     }
 
-    .tldr-content {
-        font-style: italic;
+    .tldr-keywords {
+        color: brown;
+        font-family: monospace;
+        font-size: 15px;
+        display: none;
     }
 
     ol ul {
@@ -263,9 +273,9 @@ HTML_CONTENT = """
                     <button onclick="decreaseFontSize()">aa</button>
                     <button onclick="increaseFontSize()">AA</button>
                 </div>
-                
+
+                <!-- Additional Buttons (Timestamps, NER, saving) -->
                 <div class="additional-controls">
-                    <!-- Additional Buttons (Timestamps, NER, saving) -->
                 </div>
                 
             </div>
@@ -467,6 +477,26 @@ HTML_CONTENT = """
     function scrollToTop() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+
+    // Add the event listener to show/hide TL;DR content
+    document.addEventListener('DOMContentLoaded', function() {
+        const tldrDiv = document.querySelector('.tldr');
+        tldrDiv.addEventListener('click', function() {
+            const contentDiv = tldrDiv.querySelector('.tldr-content');
+            const keywordsDiv = tldrDiv.querySelector('.tldr-keywords');
+
+            // Check current display state and toggle
+            if (contentDiv.style.display === 'none') {
+                // If content is hidden, show it and hide keywords
+                contentDiv.style.display = 'block';
+                keywordsDiv.style.display = 'none';
+            } else {
+                // If content is shown, hide it and show keywords
+                contentDiv.style.display = 'none';
+                keywordsDiv.style.display = 'block';
+            }
+        });
+    });
 </script>
 </body>
 </html>

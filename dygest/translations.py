@@ -45,12 +45,21 @@ UI_TRANSLATIONS = {
         'nl': 'Onderwerpen'
     },
     'summary': {
-        'ar': 'الملخص',
-        'en': 'Summary',
-        'da': 'Sammenfatning',
-        'de': 'Zusammenfassung',
-        'fr': 'Résumé',
-        'es': 'Resumen',
-        'nl': 'Samenvatting'
+        'ar': 'الملخص: ',
+        'en': 'Summary: ',
+        'da': 'Sammenfatning: ',
+        'de': 'Zusammenfassung: ',
+        'fr': 'Résumé: ',
+        'es': 'Resumen: ',
+        'nl': 'Samenvatting: '
+    },
+    'keywords': {
+        'ar': 'الكلمات المفتاحية: ',
+        'en': 'Keywords: ',
+        'da': 'Nøgleord: ',
+        'de': 'Schlagworte: ',
+        'fr': 'Mots-clés: ',
+        'es': 'Palabras clave: ',
+        'nl': 'Trefwoorden: '
     }
 }

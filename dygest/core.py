@@ -1,4 +1,6 @@
+import typer
 import numpy as np
+from rich import print
 from pathlib import Path
 from tqdm import tqdm
 from dataclasses import dataclass, field
@@ -6,7 +8,8 @@ from itertools import combinations
 from typing import Optional
 from langdetect import detect, DetectorFactory
 
-from dygest import llms, utils, ner_utils
+from dygest import llms, utils, ner_utils, prompts
+from dygest.output_utils import ExportFormats
 from dygest.ner_utils import NERlanguages
 
 
@@ -22,12 +25,14 @@ class DygestBaseParams:
     chunk_size: int = 1000
     add_toc: bool = False
     add_summaries: bool = False
+    add_keywords: bool = False
     add_ner: bool = True
     sim_threshold: float = 0.8
     provided_language: NERlanguages = NERlanguages.AUTO
     precise: bool = False
     verbose: bool = False
     export_metadata: bool = False
+    export_format: ExportFormats = ExportFormats.HTML
 
 
 @dataclass
@@ -36,6 +41,7 @@ class DygestProcessor(DygestBaseParams):
     text: Optional[str] = field(default=None, init=False)
     toc: Optional[list] = field(default=None, init=False)
     summaries: Optional[str] = field(default=None, init=False)
+    keywords: Optional[list] = field(default=None, init=False)
     entities: Optional[list] = field(default=None, init=False)
     files_to_process: Optional[list] = field(default=None, init=False)
     token_count: Optional[int] = field(default=None, init=False)
@@ -50,8 +56,46 @@ class DygestProcessor(DygestBaseParams):
 
         # Load files to process
         self.files_to_process = utils.load_filepath(self.filepath)
+
+    def run_language_detection(self, file: Path) -> str:
+        """
+        Get language of text to set the correct NER model.
+        """
+        language = self.provided_language
+        if language == 'auto':
+            DetectorFactory.seed = 0
+            language = detect(self.text[:500])
+            print(f"... Detected language '{language}' for {file.name}")
+        return language   
         
-    def create_toc(self, chunks):
+    def run_ner(self, file: Path) -> tuple[str, list]:
+        """
+        Run Named Entity Recognition with flair framework on the text.
+        """
+        language = self.run_language_detection(file)
+
+        # Load NER tagger if not already loaded or if language has changed
+        if self.ner_tagger is None or self.provided_language == 'auto':
+            self.ner_tagger = ner_utils.load_tagger(
+                language=language,
+                precise=self.precise
+            )
+            if self.verbose:
+                print(f"... Loaded NER tagger for language: {language}")
+
+            # Run Named Entity Recognition (NER)
+            entities = ner_utils.get_flair_entities(self.text, self.ner_tagger)
+            all_entities = ner_utils.update_entity_positions(entities, self.text)
+
+            if self.verbose:
+                print(f"... ENTITIES FOR DOC:")
+                utils.print_entities(all_entities)
+            
+            return language, all_entities
+        else:
+            return language, []
+        
+    def create_toc(self, chunks) -> dict:
         """
         Create a Table of Contents (TOC) for the provided file.
         """
@@ -60,7 +104,7 @@ class DygestProcessor(DygestBaseParams):
         complete_toc_parts = []
         for idx, chunk in enumerate(tqdm(chunks)):
             result = llms.call_llm(
-                template='get_topics',
+                template=prompts.GET_TOPICS,
                 text_input=chunk,
                 model=self.light_model,
                 temperature=self.temperature,
@@ -88,7 +132,7 @@ class DygestProcessor(DygestBaseParams):
         # Post-Processing: Create TOC
         print(f'... Compiling TOC with {self.expert_model}')
         toc = llms.call_llm(
-            template='create_toc',
+            template=prompts.CREATE_TOC,
             text_input=filtered_toc_parts,
             model=self.expert_model,
             temperature=self.temperature,
@@ -97,7 +141,7 @@ class DygestProcessor(DygestBaseParams):
         final_toc = utils.validate_summaries(toc)
         return final_toc
     
-    def create_summaries(self, chunks):
+    def create_summaries(self, chunks) -> str:
         """
         Create summaries.
         """
@@ -106,7 +150,7 @@ class DygestProcessor(DygestBaseParams):
         tldrs = []
         for idx, chunk in enumerate(tqdm(chunks)):
             tldr = llms.call_llm(
-                template='create_tldr',
+                template=prompts.CREATE_TLDR,
                 text_input=chunk,
                 model=self.light_model,
                 temperature=self.temperature,
@@ -118,9 +162,9 @@ class DygestProcessor(DygestBaseParams):
                 print(f"... SUMMARY FOR CHUNK {idx + 1}:")
                 utils.print_summaries(tldr)
                 
-        print(f'... Assembling summaries with {self.expert_model}')
+        print(f'... Harmonizing summaries with {self.expert_model}')
         combined_tldrs = llms.call_llm(
-                template='combine_tldrs',
+                template=prompts.COMBINE_TLDRS,
                 text_input='\n'.join(tldrs),
                 model=self.expert_model,
                 temperature=self.temperature,
@@ -129,43 +173,56 @@ class DygestProcessor(DygestBaseParams):
         
         return combined_tldrs
     
-    def run_language_detection(self, file: Path) -> str:
+    def generate_keywords(self, chunks):
         """
-        Get language of text to set the correct NER model.
+        Generate keywords.
         """
-        language = self.provided_language
-        if language == 'auto':
-            DetectorFactory.seed = 0
-            language = detect(self.text[:500])
-            print(f"... Detected language '{language}' for {file.name}")
-        return language   
+        def clean_generated_keywords (keywords_for_doc):
+            """
+            Return a unique list of keywords from LLM generated keyword list.
+            """
+            clean_keywords = set()
+            for keyword_pair in keywords_for_doc:
+                raw_pair = keyword_pair.split(',')
+                for keyword in raw_pair:
+                    keyword = utils.remove_punctuation(keyword.strip())
+                    keyword = utils.replace_underscores_with_whitespace(keyword)
+                    clean_keywords.add(keyword)
+            return clean_keywords
+
+        print(f'... Generating keywords with {self.light_model}')
         
-    def run_ner(self, file: Path) -> tuple[str, list]:
-        """
-        Run Named Entity Recognition with flair framework on the file.
-        """
-        language = self.run_language_detection(file)
-
-        # Load NER tagger if not already loaded or if language has changed
-        if self.ner_tagger is None or self.provided_language == 'auto':
-            self.ner_tagger = ner_utils.load_tagger(
-                language=language,
-                precise=self.precise
+        keywords_for_doc = []
+        for idx, chunk in enumerate(tqdm(chunks)):
+            # Generate keywords chunk wise
+            keywords_for_chunk = llms.call_llm(
+                template=prompts.GENERATE_KEYWORDS,
+                text_input=chunk,
+                model=self.light_model,
+                temperature=self.temperature,
+                sleep_time=self.sleep
             )
-            if self.verbose:
-                print(f"... Loaded NER tagger for language: {language}")
-
-            # Run Named Entity Recognition (NER)
-            entities = ner_utils.get_flair_entities(self.text, self.ner_tagger)
-            all_entities = ner_utils.update_entity_positions(entities, self.text)
-
-            if self.verbose:
-                print(f"... ENTITIES FOR DOC:")
-                utils.print_entities(all_entities)
+            keywords_for_doc.append(keywords_for_chunk)
             
-            return language, all_entities
-        else:
-            return language, []
+            if self.verbose:
+                print(f"... KEYWORDS FOR CHUNK {idx + 1}:")
+                utils.print_summaries(keywords_for_chunk)
+
+        # Create a unique set of keywords
+        keywords_for_doc = clean_generated_keywords(keywords_for_doc)
+
+        # Remove similar keywords
+        print(f'... Removing similar keywords')
+        sp = SummaryProcessor(
+            keywords=keywords_for_doc,
+            embedding_model=self.embedding_model,
+            key='topic',
+            threshold=self.sim_threshold,
+            verbose=self.verbose
+        )
+        filtered_keywords = sp.get_filtered_keywords()
+
+        return filtered_keywords
             
     def process(self):
         for file in self.files_to_process:
@@ -177,12 +234,16 @@ class DygestProcessor(DygestBaseParams):
         self.output_filepath = self.output_dir.joinpath(self.filename)
 
         # Load and chunk the file
-        self.text = utils.load_txt_file(file)
-        chunks, self.token_count = utils.chunk_text(
-            text=self.text, 
-            chunk_size=self.chunk_size
-        )
- 
+        try: 
+            self.text = utils.load_txt_file(file)
+            chunks, self.token_count = utils.chunk_text(
+                text=self.text, 
+                chunk_size=self.chunk_size
+            )
+        except Exception as e:
+            print(f"[purple]... Error during file loading and text chunking: {e}")
+            raise typer.Exit(code=1)
+
         if self.verbose:
             print(f"... Processing file: {file}")
             print(f"... Total tokens in file: {self.token_count}")
@@ -190,25 +251,46 @@ class DygestProcessor(DygestBaseParams):
 
         # Run Named Entity Recognition (NER)
         if self.add_ner:
-            self.language, self.entities = self.run_ner(file)
+            try:
+                self.language, self.entities = self.run_ner(file)
+            except Exception as e:
+                print(f"[purple]... Error running NER: {e}")
+                raise typer.Exit(code=1)
         
-        # Create TOC
+        # Create TOC (Table of Contents)
         if self.add_toc:
-            self.toc = self.create_toc(chunks)
+            try:
+                self.toc = self.create_toc(chunks)
+            except Exception as e:
+                print(f"[purple]... Error during TOC creation: {e}")
+                raise typer.Exit(code=1)
         
-        # Post-Processing: Clean summaries
+        # Create a short summary
         if self.add_summaries:
-            self.summaries = self.create_summaries(chunks)
+            try:
+                self.summaries = self.create_summaries(chunks)
+            except Exception as e:
+                print(f"[purple]... Error during summary creation: {e}")
+                raise typer.Exit(code=1)
+
+        # Create keywords
+        if self.add_keywords:
+            try:
+                self.keywords = self.generate_keywords(chunks)
+            except Exception as e:
+                print(f"[purple]... Error during keyword generation: {e}")
+                raise typer.Exit(code=1)
             
             
 class SummaryProcessor:
     def __init__(
             self, 
-            summaries, 
-            embedding_model,
-            key='topic', 
-            threshold=0.8,
-            verbose=False
+            summaries: Optional[dict[str]] = None, 
+            keywords: Optional[set[str]] = None,
+            embedding_model: str = None,
+            key: str = 'topic', 
+            threshold: float = 0.8,
+            verbose: bool = False
             ):
         """
         Initialize the SummaryProcessor and process the summaries.
@@ -223,9 +305,13 @@ class SummaryProcessor:
         self.key = key
         self.threshold = threshold
         self.summaries = summaries
+        self.keywords = keywords
+        self.verbose = verbose  
+
         self.embedded_summaries = {}
-        self.filtered_summaries = []
-        self.verbose = verbose        
+        self.filtered_summaries = []  
+        self.embedded_keywords = {}
+        self.filtered_keywords = []
 
     def embed_summaries(self):
         """
@@ -235,6 +321,14 @@ class SummaryProcessor:
             text = summary[self.key]
             response = llms.get_embeddings(text, model=self.embedding_model)
             self.embedded_summaries[text] = np.array(response)
+
+    def embed_keywords(self):
+        """
+        Embed strings (like keywords).
+        """
+        for keyword in self.keywords:
+            response = llms.get_embeddings(keyword, model=self.embedding_model)
+            self.embedded_keywords[keyword] = np.array(response)
 
     @staticmethod
     def cosine_similarity(vec1, vec2):
@@ -290,7 +384,43 @@ class SummaryProcessor:
                 print("... No similar topics found above the threshold.")
 
         return filtered_summaries
+    
+    def remove_similar_keywords(self):
+        """
+        Remove similar keywords based on cosine similarity of their embeddings.
 
+        Returns:
+            list[str]: A filtered list of keywords with similar ones removed.
+        """
+        similar_pairs = []
+
+        # Generate all unique pairs of keywords and check their similarity
+        for (kw1, emb1), (kw2, emb2) in combinations(self.embedded_keywords.items(), 2):
+            similarity = self.cosine_similarity(emb1, emb2)
+            if similarity >= self.threshold:
+                similar_pairs.append({
+                    'keyword_1': kw1,
+                    'keyword_2': kw2,
+                    'similarity_score': similarity
+                })
+
+        # Identify keywords to remove.
+        keywords_to_remove = set(pair['keyword_2'] for pair in similar_pairs)
+
+        # Filter out the similar keywords
+        filtered_keywords = [k for k in self.keywords if k not in keywords_to_remove]
+
+        # Display similar keywords if verbose is enabled
+        if self.verbose:
+            if similar_pairs:
+                print("... Similar Keywords Identified:")
+                for pair in similar_pairs:
+                    print(f"... '{pair['keyword_1']}' <--> '{pair['keyword_2']}' with similarity score of {pair['similarity_score']:.4f}")
+            else:
+                print("... No similar keywords found above the threshold.")
+
+        return filtered_keywords
+    
     def get_filtered_summaries(self):
         """
         Get the filtered summaries.
@@ -301,3 +431,14 @@ class SummaryProcessor:
         self.embed_summaries()
         self.filtered_summaries = self.remove_similar_summaries()
         return self.filtered_summaries
+    
+    def get_filtered_keywords(self):
+        """
+        Get the filtered summaries.
+
+        Returns:
+            list[dict]: Filtered summaries.
+        """
+        self.embed_keywords()
+        self.filtered_keywords = self.remove_similar_keywords()
+        return self.filtered_keywords

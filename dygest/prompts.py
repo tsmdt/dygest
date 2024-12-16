@@ -1,3 +1,5 @@
+### TOC CREATION ###
+
 GET_TOPICS = """
 Perform the following tasks on the provided text:
 
@@ -142,6 +144,7 @@ Perform the following tasks on the provided list of summaries:
 # **Input Summaries:**
 # """
 
+### SUMMARY CREATION ###
 
 CREATE_TLDR = """
 Perform the following tasks on the provided text chunk:
@@ -172,3 +175,50 @@ Return **ONLY** the single summary.
 
 **Input Summaries:**
 """
+
+### KEYWORD CREATION ###
+
+# GET_KEYWORDS = """
+# Perform the following task on the provided text chunk:
+
+# 1. Generate max. 2 keywords that **most accuratly describe the content** for the provided text chunk.
+# 2. **The keywords should be**:
+#    - rather **abstract** (capturing concepts) than **detailed** (capturing specific information)
+#    - **Accurate**
+#    - **Informative**
+# 3. Return the keywords **IN THE LANGUAGE OF THE INPUT TEXT** as a plain string, divided by comma 
+# (e.g. "research data, NFDI").
+
+# **Return ONLY the string and add nothing else!**
+
+# **Text Chunk:**
+# """
+
+GENERATE_KEYWORDS = """
+Analyze the following text chunk and generate a set of broad, high-level keywords that capture the main topics and themes of the content.
+
+**Requirements:**
+1. **Focus on overarching themes and main topics** rather than specific details.
+2. Ensure keywords are **accurate** and **informative**.
+3. Provide keywords **IN THE SAME LANGUAGE** as the input text.
+4. Limit the number of keywords to **2-5** to maintain relevance.
+5. Return the keywords as a plain string, separated by commas.
+
+Return **ONLY the comma-separated keywords** and **nothing else**.
+
+**Text Chunk:**
+"""
+
+# GENERATE_KEYWORDS = """
+# Analyze the following text chunk and generate keywords that best represent its content.
+
+# Requirements:
+# 1. Keywords should be abstract concepts rather than specific details.
+# 2. Ensure keywords are accurate and informative.
+# 3. Provide keywords **IN THE SAME LANGUAGE** as the input text.
+# 4. Return the keywords as a plain string, separated by commas.
+
+# **Return ONLY the comma-separated keywords and nothing else.**
+
+# **Text Chunk:**
+# """

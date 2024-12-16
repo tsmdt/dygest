@@ -33,7 +33,7 @@
 
 ## Requirements
 - 🐍 Python `>=3.10` 
-- 🔑 API Keys for LLM services like `OpenAI`, `Anthropic` and `Groq` *and / or* a running `Ollama` instance
+- 🔑 API keys for LLM services like `OpenAI`, `Anthropic` and `Groq` *and / or* a running `Ollama` instance
 
 > [!NOTE]
 > API Keys have to be stored in your environment (e.g. `export $OPENAI_API_KEY=skj....`)

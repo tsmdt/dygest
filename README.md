@@ -22,8 +22,10 @@
 
 - **Named Entity Recognition (NER)**  
   Named Entity Recognition via fast and reliable `flair` framework (identifies persons, organisations, locations etc.).
+  
 - **User-friendly HTML Editor**  
   By default `dygest` will create a `.html` file that can be viewed in standard browsers and combines summaries, keywords, TOC and NER for your text. It features a text editor for you to make further changes.
+  
 - **Export Formats**: `.json` `.csv` `.html`
 
 
@@ -79,8 +81,6 @@ source venv/bin/activate
 ```shell
 pip install .
 ```
-
-### Install with pip
 
 ## Usage
 

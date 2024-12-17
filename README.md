@@ -1,3 +1,5 @@
+[![PyPI version](https://badge.fury.io/py/dygest.svg)](https://badge.fury.io/py/dygest)
+
 # 🌞 DYGEST: Document Insights Generator
 > [!NOTE] 
 **dygest** is a text analysis tool that extracts insights from `.txt` files, generating summaries, keywords, TOCs, and performing Named Entity Recognition (NER).

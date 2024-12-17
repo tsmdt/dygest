@@ -1,8 +1,9 @@
 import typer
 from typing import Optional
 from pathlib import Path
+from rich import print
 from dygest.output_utils import ExportFormats
-from dygest.config import CONFIG
+from dygest.config import CONFIG, DEFAULT_CONFIG
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -174,9 +175,14 @@ def main(
     """
     from dygest.config import load_config
     from dygest import core, output_utils, utils
-    
     global CONFIG
+    
+    # Load config and make sure it is correctly set
     CONFIG = load_config()
+    if CONFIG == DEFAULT_CONFIG:
+        print(f"[purple]... Please configure dygest first by running *dygest \
+config* and set your LLMs.")
+        return
     
     # Check for file
     if filepath is None:

@@ -1,5 +1,6 @@
 import yaml
 import typer
+from rich import print
 from enum import Enum
 from pathlib import Path
 
@@ -19,6 +20,17 @@ DEFAULT_CONFIG = {
 CONFIG_FILE = Path.cwd() / "dygest_config.yaml"
 CONFIG = None
 
+def missing_config_requirements(config: dict) -> bool:
+    """
+    Checks if all required CONFIG fields are set by the user.
+    """
+    required_fields = [
+        'light_model', 
+        'expert_model', 
+        'embedding_model'
+        ]
+    return any(config.get(field) is None for field in required_fields)
+
 def load_config() -> dict:
     """
     Loads the configuration from a JSON file if it exists.
@@ -32,7 +44,7 @@ def load_config() -> dict:
             try:
                 config = yaml.safe_load(f)
             except yaml.YAMLError as e:
-                typer.echo(f"Error parsing YAML configuration: {e}", err=True)
+                print(f"[purple]... Error parsing YAML configuration: {e}", err=True)
                 
             # Merge with DEFAULT_CONFIG to ensure all keys are present
             merged_config = DEFAULT_CONFIG.copy()
@@ -43,7 +55,7 @@ def load_config() -> dict:
                 try:
                     merged_config['language'] = NERlanguages(merged_config['language'])
                 except ValueError:
-                    typer.echo(f"... Warning: '{merged_config['language']}' is not a valid NER language. Defaulting to 'auto'.", err=True)
+                    print(f"[purple]... Warning: '{merged_config['language']}' is not a valid NER language. Defaulting to 'auto'.", err=True)
                     merged_config['language'] = NERlanguages.AUTO
             else:
                 merged_config['language'] = NERlanguages.AUTO
@@ -74,6 +86,10 @@ def print_config(config: dict):
     """
     Prints the LLM and embedding configuration in a structured format.
     """
+    # Check if requrired fields are set
+    if missing_config_requirements(config):
+        print("[purple]... Please configure all required fields.")
+    
     language_val = config.get('language')
     if isinstance(language_val, Enum):
         language_val = language_val.value  # If Enum, get its value
@@ -93,6 +109,5 @@ def print_config(config: dict):
         "API Base": config.get('api_base') or "None",
     }
     
-    print("... LLM and Embedding Configuration 🌞")
     for key, value in formatted_config.items():
         print(f"... ... {key:<27}: {value}")

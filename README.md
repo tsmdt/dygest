@@ -48,7 +48,7 @@
 
 #### Create a Python virtual environment
 ```shell
-python3.10 -m venv venv
+python3 -m venv venv
 ```
 
 #### Activate the environment
@@ -71,7 +71,7 @@ cd dygest
 
 #### Create a Python virtual environment
 ```shell
-python3.10 -m venv venv
+python3 -m venv venv
 ```
 
 #### Activate the environment

@@ -3,7 +3,6 @@ import typer
 from enum import Enum
 from pathlib import Path
 
-# Default configuration
 DEFAULT_CONFIG = {
     'light_model': None,
     'expert_model': None,

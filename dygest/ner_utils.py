@@ -1,10 +1,7 @@
 import re
 import copy
 import time
-
 from enum import Enum
-from flair.nn import Classifier
-from flair.splitter import SegtokSentenceSplitter
 from collections import defaultdict
 
 
@@ -19,10 +16,11 @@ class NERlanguages(str, Enum):
     NL = 'nl'
 
 
-def load_tagger(language: str = 'en', precise: bool = False) -> Classifier:
+def load_tagger(language: str = 'en', precise: bool = False):
     """
     Loads flair Classifier depending on a provided language.
     """
+    from flair.nn import Classifier
     flair_models = {
         'en': 'ner',
         'ar': 'ar-ner',
@@ -52,7 +50,12 @@ def load_tagger(language: str = 'en', precise: bool = False) -> Classifier:
 
     return tagger
 
-def get_flair_entities(text: str, tagger: Classifier) -> list:
+def get_flair_entities(text: str, tagger) -> list:
+    """
+    Tags named entities using a flair Classifier.
+    """
+    from flair.splitter import SegtokSentenceSplitter
+    
     # Split text_chunk into sentences
     splitter = SegtokSentenceSplitter()
     sentences = splitter.split(text)

@@ -1,7 +1,7 @@
 ### TOC CREATION ###
 
 GET_TOPICS = """
-Perform the following tasks on the provided text:
+Perform the following tasks on the provided text and **ALWAYS match its language**:
 
 1. **Identify the top 2 most important topics** discussed in the text. 
    - **Each topic name should be a concise, headline-style phrase** (e.g., no more than 5 words) that effectively captures the essence of the topic.
@@ -28,7 +28,7 @@ Return the results as JSON **IN THE LANGUAGE OF THE INPUT TEXT**. Do NOT add any
 """
 
 CREATE_TOC = """
-Perform the following tasks on the provided list of summaries:
+Perform the following tasks on the provided list of summaries and **ALWAYS match their language**:
 
 1. **Create a Table of Contents (TOC):**
    - Group related summaries under concise, relevant headlines.
@@ -60,7 +60,7 @@ Perform the following tasks on the provided list of summaries:
 ### SUMMARY CREATION ###
 
 CREATE_TLDR = """
-Perform the following tasks on the provided text chunk:
+Perform the following tasks on the provided text chunk and **ALWAYS match its language**:
 
 1. **Generate a summary of max. 3 sentences with the most important topics** for the provided text chunk.
 2. **Capture key details in those summaries**:
@@ -77,7 +77,7 @@ Perform the following tasks on the provided text chunk:
 """
 
 COMBINE_TLDRS = """
-Perform the following tasks on the provided list of summaries:
+Perform the following tasks on the provided list of summaries and **ALWAYS match their language**:
 
 1. **Generate a single summary of maximum 5 sentences that captures the most important topics from all provided summaries**.
 2. **Remove similar summaries to ensure the remaining summaries are unique**.

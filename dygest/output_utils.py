@@ -29,18 +29,18 @@ class ExportFormats(str, Enum):
 
 @dataclass
 class WriterBase:
-    filename: Path
-    output_filepath: Path
-    input_text: str
-    chunk_size: int
-    named_entities: list
-    toc: list[dict]
-    summary: str
-    keywords: list[str]
-    language: str
-    light_model: str
-    expert_model: str
-    token_count: int
+    filename: Path = field(default=None, init=True)
+    output_filepath: Path = field(default=None, init=True)
+    input_text: str = field(default=None, init=True)
+    chunk_size: int = field(default=None, init=True)
+    named_entities: list = field(default=None, init=True)
+    toc: list[dict] = field(default=None, init=True)
+    summary: str = field(default=None, init=True)
+    keywords: list[str] = field(default=None, init=True)
+    language: str = field(default=None, init=True)
+    light_model: str = field(default=None, init=True)
+    expert_model: str = field(default=None, init=True)
+    token_count: int = field(default=None, init=True)
 
 
 @dataclass
@@ -49,11 +49,12 @@ class HTMLWriter(WriterBase):
     Class for writing HTML output.
     """
     export_metadata: bool = field(default=None, init=True)
-
-    # HTML template
     has_speaker: bool = field(default=False, init=True)
-    soup = BeautifulSoup(templates.HTML_CONTENT, "html.parser")
-    has_speaker = False
+    
+    def __post_init__(self):
+        # HTML template → templates.py
+        self.soup = BeautifulSoup(templates.HTML_CONTENT, "html.parser")
+        self.has_speaker = False
 
     def write(self):
         """

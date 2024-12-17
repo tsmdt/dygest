@@ -183,29 +183,33 @@ def main(
         print('... Please provide a file or folder (--files, -f).')
         return
     
-    proc = core.DygestProcessor(
-        filepath=filepath,
-        output_dir=utils.resolve_input_dir(Path(filepath), output_dir),
-        light_model=CONFIG['light_model'],
-        expert_model=CONFIG['expert_model'],
-        embedding_model=CONFIG['embedding_model'],
-        temperature=CONFIG['temperature'],
-        sleep=CONFIG['sleep'],
-        chunk_size=CONFIG['chunk_size'],
-        add_toc=toc,
-        add_summaries=summarize,
-        add_keywords=keywords,
-        add_ner=CONFIG['ner'],
-        sim_threshold=sim_threshold,
-        provided_language=CONFIG['language'],
-        precise=CONFIG['precise'],
-        verbose=verbose,
-        export_metadata=export_metadata,
-        export_format=export_format
-    )
+    # Create a list of all files to process
+    files_to_process = utils.load_filepath(filepath)
         
-    for file in proc.files_to_process:
-        # Process each file
+    # for file in proc.files_to_process:
+    for file in files_to_process:
+        proc = core.DygestProcessor(
+            filepath=filepath,
+            output_dir=utils.resolve_input_dir(Path(filepath), output_dir),
+            light_model=CONFIG['light_model'],
+            expert_model=CONFIG['expert_model'],
+            embedding_model=CONFIG['embedding_model'],
+            temperature=CONFIG['temperature'],
+            sleep=CONFIG['sleep'],
+            chunk_size=CONFIG['chunk_size'],
+            add_toc=toc,
+            add_summaries=summarize,
+            add_keywords=keywords,
+            add_ner=CONFIG['ner'],
+            sim_threshold=sim_threshold,
+            provided_language=CONFIG['language'],
+            precise=CONFIG['precise'],
+            verbose=verbose,
+            export_metadata=export_metadata,
+            export_format=export_format
+        )
+        
+        # Process file
         proc.process_file(file)
 
         # Write output

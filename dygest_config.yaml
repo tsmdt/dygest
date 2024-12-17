@@ -1,4 +1,4 @@
-light_model: ollama/llama3.1:latest
+light_model: ollama/llama3.2:3b
 expert_model: groq/llama-3.3-70b-versatile
 embedding_model: ollama/nomic-embed-text:latest
 temperature: 0.1

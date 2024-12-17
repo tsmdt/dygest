@@ -43,7 +43,6 @@ class DygestProcessor(DygestBaseParams):
     summaries: Optional[str] = field(default=None, init=False)
     keywords: Optional[list] = field(default=None, init=False)
     entities: Optional[list] = field(default=None, init=False)
-    files_to_process: Optional[list] = field(default=None, init=False)
     token_count: Optional[int] = field(default=None, init=False)
     language: NERlanguages = field(default=None, init=False)
 
@@ -53,9 +52,6 @@ class DygestProcessor(DygestBaseParams):
             self.output_dir.mkdir(parents=True)
             if self.verbose:
                 print(f"... Created output directory at {self.output_dir}")
-
-        # Load files to process
-        self.files_to_process = utils.load_filepath(self.filepath)
 
     def run_language_detection(self, file: Path) -> str:
         """
@@ -223,12 +219,16 @@ class DygestProcessor(DygestBaseParams):
         filtered_keywords = sp.get_filtered_keywords()
 
         return filtered_keywords
-            
-    def process(self):
-        for file in self.files_to_process:
-            self.process_file(file)
 
     def process_file(self, file: Path):
+        # Make sure to reset processing values
+        self.toc = None
+        self.summaries = None
+        self.keywords = None
+        self.entities = None
+        self.token_count = None
+        self.language = None
+        
         # Get filename and output filepath
         self.filename = file.stem
         self.output_filepath = self.output_dir.joinpath(self.filename)
@@ -265,7 +265,7 @@ class DygestProcessor(DygestBaseParams):
                 print(f"[purple]... Error during TOC creation: {e}")
                 raise typer.Exit(code=1)
         
-        # Create a short summary
+        # Create a summary
         if self.add_summaries:
             try:
                 self.summaries = self.create_summaries(chunks)

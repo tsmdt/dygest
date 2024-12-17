@@ -30,7 +30,7 @@
 
 
 <p align="center">
-  <img src="./assets/dygest_html.png" width="100%">
+  <img src="./assets/dygest_html.png" width="80%">
 </p>
 
 ## Requirements

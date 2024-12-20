@@ -1,5 +1,6 @@
 import typer
 import re
+import traceback
 import numpy as np
 from rich import print
 from pathlib import Path
@@ -10,6 +11,7 @@ from typing import Optional
 from langdetect import detect, DetectorFactory
 
 from dygest import llms, utils, ner_utils, prompts
+from dygest.translations import LANGUAGES
 from dygest.output_utils import ExportFormats
 from dygest.ner_utils import NERlanguages
 
@@ -40,14 +42,16 @@ class DygestBaseParams:
 class DygestProcessor(DygestBaseParams):
     ner_tagger: Optional[object] = field(default=None, init=False)
     text: Optional[str] = field(default=None, init=False)
+    chunks: Optional[dict] = field(default=None, init=False)
     sentence_offsets: Optional[str] = field(default=None, init=False)
     toc: Optional[list] = field(default=None, init=False)
     summaries: Optional[str] = field(default=None, init=False)
     keywords: Optional[list] = field(default=None, init=False)
     entities: Optional[list] = field(default=None, init=False)
     token_count: Optional[int] = field(default=None, init=False)
-    language: NERlanguages = field(default=None, init=False)
-
+    language_ISO: NERlanguages = field(default=None, init=False)
+    language_string: str = field(default=None, init=False)
+    
     def __post_init__(self):
         self.output_dir = Path(self.output_dir)
         if not self.output_dir.exists():
@@ -58,28 +62,32 @@ class DygestProcessor(DygestBaseParams):
     def run_language_detection(self, file: Path) -> str:
         """
         Get language of text to set the correct NER model.
+        
+        Returns:
+            str: An ISO 639-1 language code ('en', 'de', 'es' ...)
         """
         language = self.provided_language
+            
         if language == 'auto':
             DetectorFactory.seed = 0
-            language = detect(self.text[:500])
-            print(f"... Detected language '{language}' for {file.name}")
-        return language   
+            language_ISO = detect(self.text[:500])
+            print(f"... Detected language '{language_ISO}' for {file.name}")
+        else:
+            language_ISO = language
+        return language_ISO   
         
-    def run_ner(self, file: Path) -> tuple[str, list]:
+    def run_ner(self) -> list[str] | None:
         """
         Run Named Entity Recognition with flair framework on the text.
         """
-        language = self.run_language_detection(file)
-
         # Load NER tagger if not already loaded or if language has changed
         if self.ner_tagger is None or self.provided_language == 'auto':
             self.ner_tagger = ner_utils.load_tagger(
-                language=language,
+                language=self.language_ISO,
                 precise=self.precise
             )
             if self.verbose:
-                print(f"... Loaded NER tagger for language: {language}")
+                print(f"... Loaded NER tagger for language: {self.language_ISO}")
 
             # Run Named Entity Recognition (NER)
             entities = ner_utils.get_flair_entities(self.text, self.ner_tagger)
@@ -89,15 +97,15 @@ class DygestProcessor(DygestBaseParams):
                 print(f"... ENTITIES FOR DOC:")
                 utils.print_entities(all_entities)
             
-            return language, all_entities
+            return all_entities
         else:
-            return language, []
+            return []
         
-    def create_toc(self, chunks: dict) -> dict:
+    def create_toc(self) -> dict:
         """
         Create a Table of Contents (TOC) for the provided file.
         """
-        def is_validate_location(location: str) -> bool:
+        def is_valid_location(location: str) -> bool:
             """
             Validate if a topic location follows this sentence id ("s_id")
             structure: "S362"
@@ -114,9 +122,11 @@ class DygestProcessor(DygestBaseParams):
             """
             if re.fullmatch(r'S<\d+>', location):
                 intermediate = re.sub(r'[<>]', '', location)
-                return re.sub(r'S0+', 'S', intermediate)
+                fixed = re.sub(r'S0+', 'S', intermediate)
+                return None if fixed == 'S' else fixed
             elif re.fullmatch(r'S0+\d+', location):
-                return re.sub(r'S0+', 'S', location)
+                fixed = re.sub(r'S0+', 'S', location)
+                return None if fixed == 'S' else fixed
             return None
 
         def align_toc_part(toc_part: list[dict], chunk: dict) -> list[dict]:
@@ -135,9 +145,9 @@ class DygestProcessor(DygestBaseParams):
             aligned_toc_part = []
             for topic in toc_part:
                 # Validate location structure
-                if not is_validate_location(topic['location']):
+                if not is_valid_location(topic['location']):
                     location = fix_wrong_location(topic['location'])
-                    if location is None or location == 'S':
+                    if location is None:
                         location = chunk_start
                     topic['location'] = location
                 else: 
@@ -166,14 +176,16 @@ class DygestProcessor(DygestBaseParams):
                                             
             return aligned_toc_part
 
+        # TOC processing
         print(f'... Creating TOC with {self.light_model}')
         
         complete_toc_parts = []
-        for chunk_key, chunk_data in tqdm(chunks.items()):
+        for chunk_key, chunk_data in tqdm(self.chunks.items()):
             result = llms.call_llm(
                 template=prompts.build_prompt_for_topics(
                     first_sentence=chunk_data['s_ids'][0],
                     last_sentence=chunk_data['s_ids'][-1],
+                    language=self.language_string,
                     chunk=chunk_data['text']
                     ),
                 model=self.light_model,
@@ -181,13 +193,13 @@ class DygestProcessor(DygestBaseParams):
                 sleep_time=self.sleep
             )
             
-            # Validate
+            # Validate for correct JSON format
             toc_part = utils.validate_summaries(result)
             
             # Re-align topic locations
             toc_part = align_toc_part(toc_part, chunk_data)
 
-            # Append the toc_part
+            # Append toc_part
             complete_toc_parts.extend(toc_part)
 
             if self.verbose:
@@ -209,7 +221,8 @@ class DygestProcessor(DygestBaseParams):
         print(f'... Compiling TOC with {self.expert_model}')
         toc = llms.call_llm(
             template=prompts.build_prompt_for_toc(
-                toc_parts=str(filtered_toc_parts)
+                toc_parts=str(filtered_toc_parts),
+                language=self.language_string
                 ),
             model=self.expert_model,
             temperature=self.temperature,
@@ -219,7 +232,7 @@ class DygestProcessor(DygestBaseParams):
         
         return final_toc
 
-    def create_summaries_and_keywords(self, chunks) -> tuple[dict, dict]:
+    def create_summaries_and_keywords(self) -> tuple[dict, dict]:
         """
         Create summaries and keywords in one go.
         """
@@ -227,10 +240,11 @@ class DygestProcessor(DygestBaseParams):
         
         summaries = []
         keywords = []
-        for chunk_key, chunk_data in tqdm(chunks.items()):
+        for chunk_key, chunk_data in tqdm(self.chunks.items()):
             result = llms.call_llm(
                 template=prompts.build_prompt_for_summary_and_keywords(
-                    text_chunk=chunk_data['text']
+                    text_chunk=chunk_data['text'],
+                    language=self.language_string
                     ),
                 model=self.light_model,
                 temperature=self.temperature,
@@ -254,7 +268,8 @@ class DygestProcessor(DygestBaseParams):
         print(f'... Harmonizing summaries with {self.expert_model}')
         final_summary = llms.call_llm(
                 template=prompts.build_prompt_for_combined_summaries(
-                    summaries='\n'.join(summaries)
+                    summaries='\n'.join(summaries),
+                    language=self.language_string
                     ),
                 model=self.expert_model,
                 temperature=self.temperature,
@@ -277,17 +292,18 @@ class DygestProcessor(DygestBaseParams):
         
         return final_summary, filtered_keywords
         
-    def create_summaries(self, chunks) -> str:
+    def create_summaries(self) -> str:
         """
         Create summaries.
         """
         print(f'... Creating summary with {self.light_model}')
         
         summaries = []
-        for chunk_key, chunk_data in tqdm(chunks.items()):
+        for chunk_key, chunk_data in tqdm(self.chunks.items()):
             summary = llms.call_llm(
                 template=prompts.build_prompt_for_summary(
-                    text_chunk=chunk_data['text']
+                    text_chunk=chunk_data['text'],
+                    language=self.language_string
                     ),
                 model=self.light_model,
                 temperature=self.temperature,
@@ -303,7 +319,8 @@ class DygestProcessor(DygestBaseParams):
         print(f'... Harmonizing summaries with {self.expert_model}')
         final_summary = llms.call_llm(
                 template=prompts.build_prompt_for_combined_summaries(
-                    summaries='\n'.join(summaries)
+                    summaries='\n'.join(summaries),
+                    language=self.language_string
                     ),
                 model=self.expert_model,
                 temperature=self.temperature,
@@ -312,17 +329,18 @@ class DygestProcessor(DygestBaseParams):
         
         return final_summary
     
-    def generate_keywords(self, chunks):
+    def generate_keywords(self):
         """
         Generate keywords for the input text.
         """
         print(f'... Generating keywords with {self.light_model}')
         
         keywords_for_doc = []
-        for chunk_key, chunk_data in tqdm(chunks.items()):
+        for chunk_key, chunk_data in tqdm(self.chunks.items()):
             keywords_for_chunk = llms.call_llm(
                 template=prompts.build_prompt_for_keywords(
-                text_chunk=chunk_data['text']
+                    text_chunk=chunk_data['text'],
+                    language=self.language_string
                 ),
                 model=self.light_model,
                 temperature=self.temperature,
@@ -366,76 +384,117 @@ class DygestProcessor(DygestBaseParams):
             clean_keywords.add(keyword)
 
         return clean_keywords
-
-    def process_file(self, file: Path):
-        # Make sure to reset processing values
+    
+    def reset_processing_vals(self):
+        """
+        Reset processing values for each file.
+        """
+        self.text = None
+        self.chunks = None
         self.toc = None
         self.summaries = None
         self.keywords = None
         self.entities = None
         self.token_count = None
-        self.language = None
+        self.language_ISO = None
+        self.language_string = None
         self.sentence_offsets = None
+
+    def process_file(self, file: Path):
+        """
+        Main function for processing files and creating TOCs, summaries, 
+        keywords as well as running NER.
+        """
+        # Reset processing values
+        self.reset_processing_vals()
         
         # Get filename and output filepath
         self.filename = file.stem
         self.output_filepath = self.output_dir.joinpath(self.filename)
 
-        # Load and chunk the file
-        # try: 
-        self.text = utils.load_txt_file(file)
-        chunks, self.token_count, self.sentence_offsets = utils.chunk_text(
-            text=self.text, 
-            chunk_size=self.chunk_size
+        # Load file
+        self.text = self.run_with_error_handling(
+            utils.load_txt_file, 
+            file, 
+            error_message="Error during file loading"
         )
-        # except Exception as e:
-        #     print(f"[purple]... Error during file loading and text chunking: {e}")
-        #     raise typer.Exit(code=1)
         
-        # print(chunks)
-        # print(self.sentence_offsets)
+        # Chunk file
+        self.chunks, self.token_count, self.sentence_offsets = (
+            self.run_with_error_handling(
+                utils.chunk_text, 
+                text=self.text, 
+                chunk_size=self.chunk_size, 
+                error_message="Error during text chunking"
+                )
+            )
 
         if self.verbose:
-            print(f"... Processing file: {file}")
+            print(f"... Processing file: [bold]{file}")
             print(f"... Total tokens in file: {self.token_count}")
-            print(f"... Number of chunks: {len(chunks)}")
-
+            print(f"... Number of chunks: {len(self.chunks)}")
+            
+        # Run language detection 
+        if not self.language_ISO:
+            self.language_ISO = self.run_with_error_handling(
+                self.run_language_detection,
+                file,
+                error_message="Error during language detection"
+            )
+            
+        # Transform ISO code to string ('en' → 'English')
+        self.language_string = LANGUAGES.get(self.language_ISO).title()
+        
         # Run Named Entity Recognition (NER)
         if self.add_ner:
-            try:
-                self.language, self.entities = self.run_ner(file)
-            except Exception as e:
-                print(f"[purple]... Error running NER: {e}")
-                raise typer.Exit(code=1)
+            self.entities = self.run_with_error_handling(
+                self.run_ner,
+                error_message="Error during NER task"
+            )
         
         # Create TOC (Table of Contents)
         if self.add_toc:
-            # try:
-            self.toc = self.create_toc(chunks)
-            # except Exception as e:
-                # print(f"[purple]... Error during TOC creation: {e}")
-                # raise typer.Exit(code=1)
-                
-        if (self.add_summaries and self.add_keywords):
-            self.summaries, self.keywords = self.create_summaries_and_keywords(
-                chunks
-                )
-        
-        # Create a summary
-        if (self.add_summaries and not self.add_keywords):
-            # try:
-            self.summaries = self.create_summaries(chunks)
-            # except Exception as e:
-            #     print(f"[purple]... Error during summary creation: {e}")
-            #     raise typer.Exit(code=1)
+            self.toc = self.run_with_error_handling(
+                self.create_toc,
+                error_message="Error during TOC creation"
+            )
+         
+        # Create summary and keywords in one go       
+        if self.add_summaries and self.add_keywords:
+            self.summaries, self.keywords = self.run_with_error_handling(
+                self.create_summaries_and_keywords, 
+                error_message="Error during creating summaries and keywords"
+            )
+        # Create only summary
+        elif self.add_summaries:
+            
+            self.summaries = self.run_with_error_handling(
+                self.create_summaries, 
+                error_message="Error during summary creation"
+            )
+        # Create only keywords
+        elif self.add_keywords:
+            self.keywords = self.run_with_error_handling(
+                self.generate_keywords,
+                error_message="Error during keyword generation"
+            )
 
-        # Create keywords
-        if (self.add_keywords and not self.add_summaries):
-            try:
-                self.keywords = self.generate_keywords(chunks)
-            except Exception as e:
-                print(f"[purple]... Error during keyword generation: {e}")
-                raise typer.Exit(code=1)
+    def run_with_error_handling(
+        self, 
+        func, 
+        *args, 
+        error_message="", 
+        **kwargs
+        ):
+        """
+        Helper function to handle exceptions uniformly.
+        """
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            print(f"[purple]... {error_message}: {e}")
+            print(f"[purple]{traceback.format_exc()}")
+            raise typer.Exit(code=1)
             
             
 class SummaryProcessor:

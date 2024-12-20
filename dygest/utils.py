@@ -60,7 +60,6 @@ def remove_punctuation(text: str) -> str:
 def replace_underscores_with_whitespace(text: str) -> str:
     return re.sub(r'_', ' ', text)
 
-
 def chunk_text(
     text: str, 
     chunk_size: int = 1000

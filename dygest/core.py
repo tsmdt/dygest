@@ -137,7 +137,7 @@ class DygestProcessor(DygestBaseParams):
                 # Validate location structure
                 if not is_validate_location(topic['location']):
                     location = fix_wrong_location(topic['location'])
-                    if location is None:
+                    if location is None or location == 'S':
                         location = chunk_start
                     topic['location'] = location
                 else: 

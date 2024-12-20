@@ -1,29 +1,5 @@
 ### TOC CREATION ###
 
-GET_TOPICS =  """You will be given a text composed of multiple sentences. The sentences are numbered sequentially:
-- {first_sentence} = the first sentence of the text
-- {last_sentence} = the last sentence of the text
-
-Do not include these sentence numbers in your summary. Instead, reference the location **with the sentence number: "S<number>"**.
-
-Your tasks:
-1. Identify the most important topic discussed in the text.
-  - The topic name should be a concise phrase (no more than 5 words).
-2. Generate a precise sub-headline (no more than 8 words) with key details.
-3. Return results as JSON **IN THE LANGUAGE OF THE INPUT TEXT**. Do NOT add anything else and use this template without any alterations:
-  
-[
-  {
-    "topic": "Concise Subheading in the language of the input text",
-    "summary": "Concise sub-headline in the language of the input text",
-    "location": "S<number>"
-  }
-]
-
-**Input Text:**
-{chunk}
-"""
-
 # GET_TOPICS =  """You will be given a text composed of multiple sentences. The sentences are numbered sequentially:
 # - {first_sentence} = the first sentence of the text
 # - {last_sentence} = the last sentence of the text
@@ -31,23 +7,47 @@ Your tasks:
 # Do not include these sentence numbers in your summary. Instead, reference the location **with the sentence number: "S<number>"**.
 
 # Your tasks:
-# 1. Identify the top 2 most important topics discussed in the text.
-#   - Each topic name should be a concise phrase (no more than 5 words).
-# 2. For each topic, generate a precise sub-headline (no more than 8 words) with key details.
+# 1. Identify the most important topic discussed in the text.
+#   - The topic name should be a concise phrase (no more than 5 words).
+# 2. Generate a precise sub-headline (no more than 8 words) with key details.
 # 3. Return results as JSON **IN THE LANGUAGE OF THE INPUT TEXT**. Do NOT add anything else and use this template without any alterations:
   
 # [
 #   {
-    # "topic": "Concise Subheading in the language of the input text",
-    # "summary": "Concise sub-headline in the language of the input text",
-    # "location": "S<number>"
-#   },
-#   ...
+#     "topic": "Concise Subheading in the language of the input text",
+#     "summary": "Concise sub-headline in the language of the input text",
+#     "location": "S<number>"
+#   }
 # ]
 
 # **Input Text:**
 # {chunk}
 # """
+
+GET_TOPICS =  """You will be given a text composed of multiple sentences. The sentences are numbered sequentially:
+- {first_sentence} = the first sentence of the text
+- {last_sentence} = the last sentence of the text
+
+Do not include these sentence numbers in your summary. Instead, reference the location **with the sentence number: "S<number>"**.
+
+Your tasks:
+1. Identify the top 2 most important topics discussed in the text.
+  - Each topic name should be a concise phrase (no more than 5 words).
+2. For each topic, generate a precise sub-headline (no more than 8 words) with key details.
+3. Return results as JSON **IN THE LANGUAGE OF THE INPUT TEXT**. Do NOT add anything else and use this template without any alterations:
+  
+[
+  {
+    "topic": "Concise Subheading in the language of the input text",
+    "summary": "Concise sub-headline in the language of the input text",
+    "location": "S<number>"
+  },
+  ...
+]
+
+**Input Text:**
+{chunk}
+"""
 
 # GET_TOPICS =  """You will be given a text composed of multiple sentences. The sentences are numbered sequentially:
 # - {first_sentence} = the first sentence of the text
@@ -137,9 +137,10 @@ Perform the following tasks on the provided list of summaries and **ALWAYS match
 ### SUMMARY CREATION ###
 
 CREATE_SUMMARY_AND_KEYWORDS = """
-Perform the following tasks on the provided text chunk and **ALWAYS match its language**:
+Perform the following tasks on the provided text:
 
-1. Generate a summary of max. 3 sentences with the **most important topics** for the provided text chunk.
+1. Generate a summary **IN THE LANGUAGE OF THE INPUT TEXT**:
+  - max. 3 sentences with the **most important topics** for the provided text.
 2. Incorporate key details in your summary:
   - **Who**: Names of individuals involved.
   - **What**: Description of the events or actions.
@@ -153,9 +154,8 @@ Perform the following tasks on the provided text chunk and **ALWAYS match its la
 
 **Output Requirements:**
 - **Format:** JSON
-- **Do NOT change the language of the input text in any way!**
+- Always **MATCH THE LANGUAGE OF THE INPUT TEXT**!
 - **Strictly adhere to the following template and return nothing else:**
-
 
 {
   "summary": "Summary in the language of the input text",

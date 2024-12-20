@@ -1,10 +1,11 @@
 import typer
+import re
 import numpy as np
 from rich import print
 from pathlib import Path
 from tqdm import tqdm
 from dataclasses import dataclass, field
-from itertools import combinations
+from itertools import combinations, chain
 from typing import Optional
 from langdetect import detect, DetectorFactory
 
@@ -39,6 +40,7 @@ class DygestBaseParams:
 class DygestProcessor(DygestBaseParams):
     ner_tagger: Optional[object] = field(default=None, init=False)
     text: Optional[str] = field(default=None, init=False)
+    sentence_offsets: Optional[str] = field(default=None, init=False)
     toc: Optional[list] = field(default=None, init=False)
     summaries: Optional[str] = field(default=None, init=False)
     keywords: Optional[list] = field(default=None, init=False)
@@ -91,28 +93,106 @@ class DygestProcessor(DygestBaseParams):
         else:
             return language, []
         
-    def create_toc(self, chunks) -> dict:
+    def create_toc(self, chunks: dict) -> dict:
         """
         Create a Table of Contents (TOC) for the provided file.
         """
+        def is_validate_location(location: str) -> bool:
+            """
+            Validate if a topic location follows this sentence id ("s_id")
+            structure: "S362"
+            """
+            return bool(re.fullmatch(r'S[1-9]\d*$', location))
+        
+        def fix_wrong_location(location: str) -> str:
+            """
+            Try to fix a malformed topic location structure.
+            
+            Transforms strings like:
+            - "S<019>" to "S19"
+            - "S09" to "S9"
+            """
+            if re.fullmatch(r'S<\d+>', location):
+                intermediate = re.sub(r'[<>]', '', location)
+                return re.sub(r'S0+', 'S', intermediate)
+            elif re.fullmatch(r'S0+\d+', location):
+                return re.sub(r'S0+', 'S', location)
+            return None
+
+        def align_toc_part(toc_part: list[dict], chunk: dict) -> list[dict]:
+            """
+            Align the topic locations (e.g. "S7") to match them with the 
+            correct chunk sentence IDs. If the location from the TOC is 
+            outside the range of the chunk’s sentence IDs, adjust it to 
+            the sentence ID within the chunk.
+            """
+            # Extract numeric sentence IDs from the chunk
+            chunk_start = chunk['s_ids'][0]   # e.g. 'S47'
+            chunk_end = chunk['s_ids'][-1]    # e.g. 'S48'
+            start_num = int(chunk_start[1:])  # Convert 'S47' -> 47
+            end_num = int(chunk_end[1:])      # Convert 'S48' -> 48
+
+            aligned_toc_part = []
+            for topic in toc_part:
+                # Validate location structure
+                if not is_validate_location(topic['location']):
+                    location = fix_wrong_location(topic['location'])
+                    if location is None:
+                        location = chunk_start
+                    topic['location'] = location
+                else: 
+                    location = topic['location']  # e.g. 'S2'
+                    
+                loc_num = int(location[1:])   # Convert 'S2' -> 2
+
+                if loc_num in range(start_num, end_num + 1):
+                    # Topic location already aligns with chunk
+                    aligned_toc_part.append(topic)
+                else:
+                    # Realign topic location with chunk s_ids
+                    if loc_num < start_num:
+                        # If location is before the chunk range
+                        # Example : 47 + 2 = 49
+                        new_loc_num = start_num + loc_num  
+                        if loc_num > end_num:
+                            new_loc_num = end_num - loc_num
+                    elif loc_num > end_num:
+                        # If location is after the chunk range
+                        new_loc_num = end_num
+                    
+                    # Update the topic location
+                    topic['location'] = f"S{new_loc_num}"
+                    aligned_toc_part.append(topic)
+                                            
+            return aligned_toc_part
+
         print(f'... Creating TOC with {self.light_model}')
         
         complete_toc_parts = []
-        for idx, chunk in enumerate(tqdm(chunks)):
+        for chunk_key, chunk_data in tqdm(chunks.items()):
             result = llms.call_llm(
-                template=prompts.GET_TOPICS,
-                text_input=chunk,
+                template=prompts.build_prompt_for_topics(
+                    first_sentence=chunk_data['s_ids'][0],
+                    last_sentence=chunk_data['s_ids'][-1],
+                    chunk=chunk_data['text']
+                    ),
                 model=self.light_model,
                 temperature=self.temperature,
                 sleep_time=self.sleep
             )
-
+            
+            # Validate
             toc_part = utils.validate_summaries(result)
+            
+            # Re-align topic locations
+            toc_part = align_toc_part(toc_part, chunk_data)
+
+            # Append the toc_part
             complete_toc_parts.extend(toc_part)
 
             if self.verbose:
-                print(f"... TOC PART FOR CHUNK {idx + 1}:")
-                utils.print_summaries(toc_part)
+                print(f"... TOC PART FOR {chunk_key.upper()}:")
+                utils.print_toc_topics(toc_part)
 
         # Post-Processing: Remove similar summaries
         print(f'... Removing similar TOC entries')
@@ -128,84 +208,134 @@ class DygestProcessor(DygestBaseParams):
         # Post-Processing: Create TOC
         print(f'... Compiling TOC with {self.expert_model}')
         toc = llms.call_llm(
-            template=prompts.CREATE_TOC,
-            text_input=filtered_toc_parts,
+            template=prompts.build_prompt_for_toc(
+                toc_parts=str(filtered_toc_parts)
+                ),
             model=self.expert_model,
             temperature=self.temperature,
             sleep_time=self.sleep
         )
         final_toc = utils.validate_summaries(toc)
+        
         return final_toc
-    
+
+    def create_summaries_and_keywords(self, chunks) -> tuple[dict, dict]:
+        """
+        Create summaries and keywords in one go.
+        """
+        print(f'... Creating summary and keywords with {self.light_model}')
+        
+        summaries = []
+        keywords = []
+        for chunk_key, chunk_data in tqdm(chunks.items()):
+            result = llms.call_llm(
+                template=prompts.build_prompt_for_summary_and_keywords(
+                    text_chunk=chunk_data['text']
+                    ),
+                model=self.light_model,
+                temperature=self.temperature,
+                sleep_time=self.sleep
+            )
+            
+            # Validate
+            validated_result = utils.validate_summaries(result)
+                        
+            # Append
+            summaries.append(validated_result['summary'])
+            keywords.append(validated_result['keywords'])
+            
+            if self.verbose:
+                print(f"... SUMMARY FOR {chunk_key.upper()}:")
+                utils.print_summaries(validated_result['summary'])
+                print("...")
+                print(f"... KEYWORDS FOR {chunk_key.upper()}:")
+                utils.print_summaries(validated_result['keywords'])
+                
+        print(f'... Harmonizing summaries with {self.expert_model}')
+        final_summary = llms.call_llm(
+                template=prompts.build_prompt_for_combined_summaries(
+                    summaries='\n'.join(summaries)
+                    ),
+                model=self.expert_model,
+                temperature=self.temperature,
+                sleep_time=self.sleep
+            )
+        
+        # Create a unique set of keywords
+        keywords_for_doc = self.clean_generated_keywords(keywords)
+        
+        # Remove similar keywords
+        print(f'... Removing similar keywords')
+        sp = SummaryProcessor(
+            keywords=keywords_for_doc,
+            embedding_model=self.embedding_model,
+            key='topic',
+            threshold=self.sim_threshold,
+            verbose=self.verbose
+        )
+        filtered_keywords = sp.get_filtered_keywords()
+        
+        return final_summary, filtered_keywords
+        
     def create_summaries(self, chunks) -> str:
         """
         Create summaries.
         """
         print(f'... Creating summary with {self.light_model}')
         
-        tldrs = []
-        for idx, chunk in enumerate(tqdm(chunks)):
-            tldr = llms.call_llm(
-                template=prompts.CREATE_TLDR,
-                text_input=chunk,
+        summaries = []
+        for chunk_key, chunk_data in tqdm(chunks.items()):
+            summary = llms.call_llm(
+                template=prompts.build_prompt_for_summary(
+                    text_chunk=chunk_data['text']
+                    ),
                 model=self.light_model,
                 temperature=self.temperature,
                 sleep_time=self.sleep
             )
-            tldrs.append(tldr)
+            # Append
+            summaries.append(summary)
             
             if self.verbose:
-                print(f"... SUMMARY FOR CHUNK {idx + 1}:")
-                utils.print_summaries(tldr)
+                print(f"... SUMMARY FOR {chunk_key.upper()}:")
+                utils.print_summaries(summary)
                 
         print(f'... Harmonizing summaries with {self.expert_model}')
-        combined_tldrs = llms.call_llm(
-                template=prompts.COMBINE_TLDRS,
-                text_input='\n'.join(tldrs),
+        final_summary = llms.call_llm(
+                template=prompts.build_prompt_for_combined_summaries(
+                    summaries='\n'.join(summaries)
+                    ),
                 model=self.expert_model,
                 temperature=self.temperature,
                 sleep_time=self.sleep
             )
         
-        return combined_tldrs
+        return final_summary
     
     def generate_keywords(self, chunks):
         """
-        Generate keywords.
+        Generate keywords for the input text.
         """
-        def clean_generated_keywords (keywords_for_doc):
-            """
-            Return a unique list of keywords from LLM generated keyword list.
-            """
-            clean_keywords = set()
-            for keyword_pair in keywords_for_doc:
-                raw_pair = keyword_pair.split(',')
-                for keyword in raw_pair:
-                    keyword = utils.remove_punctuation(keyword.strip())
-                    keyword = utils.replace_underscores_with_whitespace(keyword)
-                    clean_keywords.add(keyword)
-            return clean_keywords
-
         print(f'... Generating keywords with {self.light_model}')
         
         keywords_for_doc = []
-        for idx, chunk in enumerate(tqdm(chunks)):
-            # Generate keywords chunk wise
+        for chunk_key, chunk_data in tqdm(chunks.items()):
             keywords_for_chunk = llms.call_llm(
-                template=prompts.GENERATE_KEYWORDS,
-                text_input=chunk,
+                template=prompts.build_prompt_for_keywords(
+                text_chunk=chunk_data['text']
+                ),
                 model=self.light_model,
                 temperature=self.temperature,
                 sleep_time=self.sleep
             )
-            keywords_for_doc.append(keywords_for_chunk)
+            keywords_for_doc.append(keywords_for_chunk.split(','))
             
             if self.verbose:
-                print(f"... KEYWORDS FOR CHUNK {idx + 1}:")
+                print(f"... KEYWORDS FOR CHUNK {chunk_key.upper()}:")
                 utils.print_summaries(keywords_for_chunk)
 
         # Create a unique set of keywords
-        keywords_for_doc = clean_generated_keywords(keywords_for_doc)
+        keywords_for_doc = self.clean_generated_keywords(keywords_for_doc)
 
         # Remove similar keywords
         print(f'... Removing similar keywords')
@@ -219,6 +349,23 @@ class DygestProcessor(DygestBaseParams):
         filtered_keywords = sp.get_filtered_keywords()
 
         return filtered_keywords
+    
+    def clean_generated_keywords(
+        self, 
+        keywords_for_doc: str | list
+        ) -> list[str]:
+        """
+        Return a unique list of keywords from LLM generated keyword list.
+        """        
+        clean_keywords = set()
+        
+        flattened = list(chain.from_iterable(keywords_for_doc))
+        for keyword in flattened:
+            keyword = utils.remove_punctuation(keyword.strip())
+            keyword = utils.replace_underscores_with_whitespace(keyword)
+            clean_keywords.add(keyword)
+
+        return clean_keywords
 
     def process_file(self, file: Path):
         # Make sure to reset processing values
@@ -228,21 +375,25 @@ class DygestProcessor(DygestBaseParams):
         self.entities = None
         self.token_count = None
         self.language = None
+        self.sentence_offsets = None
         
         # Get filename and output filepath
         self.filename = file.stem
         self.output_filepath = self.output_dir.joinpath(self.filename)
 
         # Load and chunk the file
-        try: 
-            self.text = utils.load_txt_file(file)
-            chunks, self.token_count = utils.chunk_text(
-                text=self.text, 
-                chunk_size=self.chunk_size
-            )
-        except Exception as e:
-            print(f"[purple]... Error during file loading and text chunking: {e}")
-            raise typer.Exit(code=1)
+        # try: 
+        self.text = utils.load_txt_file(file)
+        chunks, self.token_count, self.sentence_offsets = utils.chunk_text(
+            text=self.text, 
+            chunk_size=self.chunk_size
+        )
+        # except Exception as e:
+        #     print(f"[purple]... Error during file loading and text chunking: {e}")
+        #     raise typer.Exit(code=1)
+        
+        # print(chunks)
+        # print(self.sentence_offsets)
 
         if self.verbose:
             print(f"... Processing file: {file}")
@@ -259,22 +410,27 @@ class DygestProcessor(DygestBaseParams):
         
         # Create TOC (Table of Contents)
         if self.add_toc:
-            try:
-                self.toc = self.create_toc(chunks)
-            except Exception as e:
-                print(f"[purple]... Error during TOC creation: {e}")
-                raise typer.Exit(code=1)
+            # try:
+            self.toc = self.create_toc(chunks)
+            # except Exception as e:
+                # print(f"[purple]... Error during TOC creation: {e}")
+                # raise typer.Exit(code=1)
+                
+        if (self.add_summaries and self.add_keywords):
+            self.summaries, self.keywords = self.create_summaries_and_keywords(
+                chunks
+                )
         
         # Create a summary
-        if self.add_summaries:
-            try:
-                self.summaries = self.create_summaries(chunks)
-            except Exception as e:
-                print(f"[purple]... Error during summary creation: {e}")
-                raise typer.Exit(code=1)
+        if (self.add_summaries and not self.add_keywords):
+            # try:
+            self.summaries = self.create_summaries(chunks)
+            # except Exception as e:
+            #     print(f"[purple]... Error during summary creation: {e}")
+            #     raise typer.Exit(code=1)
 
         # Create keywords
-        if self.add_keywords:
+        if (self.add_keywords and not self.add_summaries):
             try:
                 self.keywords = self.generate_keywords(chunks)
             except Exception as e:

@@ -1,7 +1,6 @@
 import json
 import re
 import json_repair
-
 from typing import Optional
 from pathlib import Path
 
@@ -61,43 +60,105 @@ def remove_punctuation(text: str) -> str:
 def replace_underscores_with_whitespace(text: str) -> str:
     return re.sub(r'_', ' ', text)
 
-def chunk_text(text: str, chunk_size: int = 1000) -> tuple[list[str], int]:
+
+def chunk_text(
+    text: str, 
+    chunk_size: int = 1000
+) -> tuple[dict, int, dict]:
     """
-    Chunks string by max_tokens and returns text_chunks and token count.
+    Chunks the text sentence-wise by max_tokens.
+    
+    Returns:
+    - chunks: A dictionary of the form:
+        {
+          'chunk_01': {
+              'text': '...',
+              's_ids': ['S1', 'S2', ...]
+          },
+          'chunk_02': {...},
+          ...
+        }
+    - token_count: Total number of tokens in the input text.
+    - sentence_offsets: A dict mapping "S<id>" to the starting character 
+      index of that sentence in 'text'.
     """
     import tiktoken
     from flair.splitter import SegtokSentenceSplitter
+    import re
 
-    tokenizer = tiktoken.get_encoding("gpt2") 
-    
+    tokenizer = tiktoken.get_encoding("gpt2")
+
     token_count = 0
-    chunks = []
+    chunks = {}
+    chunk_index = 1
     current_chunk = []
     current_chunk_length = 0
+    current_chunk_s_ids = []
+
+    # Remove all linebreaks from the input text
+    text = re.sub(r'[\n\t\r]', ' ', text)
 
     # Split text into sentences
     splitter = SegtokSentenceSplitter()
     sentences = splitter.split(text)
-    
+
+    # Map sentence IDs to their start offsets in the input text
+    sentence_offsets = {}
+    current_search_pos = 0
+    sentence_id = 1
+
     for sentence in sentences:
+        # Find the offset of this sentence in the original text
+        start_index = text.index(sentence.text, current_search_pos)
+        sentence_offsets[f"S{sentence_id}"] = start_index
+        current_search_pos = start_index + len(sentence.text)
+        sentence_id += 1
+
+    # Chunk text based on token limits
+    current_chunk_s_ids = []
+    global_sentence_id = 1  # reset to 1 to track sentences globally
+
+    for sentence in sentences:
+        s_id = f"S{global_sentence_id}"
         sentence_tokens = tokenizer.encode(sentence.text)
         sentence_length = len(sentence_tokens)
         token_count += sentence_length
-        
+
         if current_chunk_length + sentence_length > chunk_size:
-            chunks.append(tokenizer.decode(current_chunk))
-            current_chunk = sentence_tokens
+            # Finish the current chunk
+            if current_chunk:
+                chunk_key = f"chunk_{chunk_index:02d}"
+                chunks[chunk_key] = {
+                    'text': tokenizer.decode(current_chunk),
+                    's_ids': current_chunk_s_ids
+                }
+                chunk_index += 1
+            
+            # Start a new chunk
+            current_chunk = sentence_tokens[:]
             current_chunk_length = sentence_length
+            current_chunk_s_ids = [s_id]
         else:
+            # Add sentence to the current chunk
             if current_chunk:  # Add a space between sentences
-                current_chunk.append(tokenizer.encode(" ")[0])
+                space_token = tokenizer.encode(" ")[0]
+                current_chunk.append(space_token)
+                current_chunk_length += 1
             current_chunk.extend(sentence_tokens)
             current_chunk_length += sentence_length
-    
+            current_chunk_s_ids.append(s_id)
+
+        global_sentence_id += 1
+
+    # Add the final chunk if present
     if current_chunk:
-        chunks.append(tokenizer.decode(current_chunk))
-    
-    return chunks, token_count
+        chunk_key = f"chunk_{chunk_index:02d}"
+        chunks[chunk_key] = {
+            'text': tokenizer.decode(current_chunk),
+            's_ids': current_chunk_s_ids
+        }
+
+    return chunks, token_count, sentence_offsets
 
 def sort_summaries_by_key(summaries: list[dict], key: str) -> list[dict]:
     return sorted(summaries, key=lambda x: x[key])
@@ -170,6 +231,10 @@ def validate_summaries(llm_result):
 def print_entities(entities: list[dict]) -> None:
     [print(f"... ... {entity['text']} → {entity['ner_tag']}") for entity in entities]
 
-def print_summaries(summaries: list[dict]) -> None:
-    for idx, item in enumerate(summaries):
-        print(f"... ... [{idx + 1}] {item['topic']}: {item['summary']} (LOCATION: {item['location']})")
+def print_toc_topics(toc_part: list[dict]) -> None:
+    for idx, item in enumerate(toc_part):
+        print(f"... [{idx + 1}] {item['topic']}: {item['summary']} (LOCATION: {item['location']})")
+
+def print_summaries(summary: str) -> None:
+    print(f"... {summary}")
+    

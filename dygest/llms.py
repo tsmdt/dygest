@@ -5,7 +5,6 @@ from typing import Optional
 from openai import OpenAIError
 from litellm import completion, embedding, BadRequestError
 
-
 def get_api_base(model_name: str) -> Optional[str]:
     """
     Determine the api_base URL based on the LLM service provider.
@@ -17,9 +16,9 @@ def get_api_base(model_name: str) -> Optional[str]:
     return api_base_mappings.get(provider, None)
 
 def call_llm(
-    template: str, 
-    text_input: str, 
-    model: str, 
+    template: str = None, 
+    text_input: str = None, 
+    model: str = None, 
     temperature: float = 0.1, 
     api_key: str = None,
     api_base: str = None,
@@ -36,7 +35,8 @@ def call_llm(
     - temperature: The LLM sampling temperature
     - api_base: Optional API base URL for some models (like Ollama or custom Hugging Face endpoints)
     """
-    messages = [{"role": "user", "content": f"{template} {text_input}"}]
+    # messages = [{"role": "user", "content": f"{template} {text_input}"}]
+    messages = [{"role": "user", "content": f"{template}"}]
 
     if not api_base:
         api_base = get_api_base(model)

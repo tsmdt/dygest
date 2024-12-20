@@ -110,4 +110,4 @@ def print_config(config: dict):
     }
     
     for key, value in formatted_config.items():
-        print(f"... ... {key:<27}: {value}")
+        print(f"[deep_pink2]... ... {key:<27}→ [light_pink4]{value}")

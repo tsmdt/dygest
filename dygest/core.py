@@ -138,13 +138,25 @@ class DygestProcessor(DygestBaseParams):
             """
             # Extract numeric sentence IDs from the chunk
             chunk_start = chunk['s_ids'][0]   # e.g. 'S47'
-            chunk_end = chunk['s_ids'][-1]    # e.g. 'S48'
-            start_num = int(chunk_start[1:])  # Convert 'S47' -> 47
-            end_num = int(chunk_end[1:])      # Convert 'S48' -> 48
+            chunk_end   = chunk['s_ids'][-1]  # e.g. 'S48'
+            start_num   = int(chunk_start[1:])  
+            end_num     = int(chunk_end[1:])      
 
+            # Validate locations in toc_part
+            all_toc_nums = [int(topic['location'][1:]) for topic in toc_part
+                            if is_valid_location(topic['location'])]
+            if len(all_toc_nums) == 0:
+                # Fallback if none are valid
+                toc_start_num = start_num
+                toc_end_num   = end_num
+            else:
+                toc_start_num = min(all_toc_nums)
+                toc_end_num   = max(all_toc_nums)
+            
             aligned_toc_part = []
+
             for topic in toc_part:
-                # Validate location structure
+                # Validate location
                 if not is_valid_location(topic['location']):
                     location = fix_wrong_location(topic['location'])
                     if location is None:
@@ -152,37 +164,43 @@ class DygestProcessor(DygestBaseParams):
                     topic['location'] = location
                 else: 
                     location = topic['location']  # e.g. 'S2'
-                    
-                loc_num = int(location[1:])   # Convert 'S2' -> 2
-
-                if loc_num in range(start_num, end_num + 1):
-                    # Topic location already aligns with chunk
-                    aligned_toc_part.append(topic)
+                            
+                loc_num = int(location[1:])
+                
+                # If it's already within [start_num, end_num], leave it alone:
+                if start_num <= loc_num <= end_num:
+                    new_loc_num = loc_num
                 else:
-                    # Realign topic location with chunk s_ids
-                    if loc_num < start_num:
-                        # If location is before the chunk range
-                        # Example : 47 + 2 = 49
-                        new_loc_num = start_num + loc_num  
-                        if loc_num > end_num:
-                            new_loc_num = end_num - loc_num
-                    elif loc_num > end_num:
-                        # If location is after the chunk range
-                        new_loc_num = end_num
-                    
-                    # Update the topic location
-                    topic['location'] = f"S{new_loc_num}"
-                    aligned_toc_part.append(topic)
-                                            
-            return aligned_toc_part
+                    # If toc_part effectively has only one point (avoid dividing by zero)
+                    if toc_start_num == toc_end_num:
+                        # Just clamp to the chunk start or end
+                        if loc_num < start_num:
+                            new_loc_num = start_num
+                        else:
+                            new_loc_num = end_num
+                    else:
+                        # Calculate proportion in [toc_start_num, toc_end_num]
+                        proportion = (loc_num - toc_start_num) / (toc_end_num - toc_start_num)
+                        # Map proportion to [start_num, end_num]
+                        mapped_loc_num = start_num + proportion * (end_num - start_num)
+                        # Round and clamp
+                        mapped_loc_num = round(mapped_loc_num)
+                        mapped_loc_num = max(start_num, min(mapped_loc_num, end_num))
+                        new_loc_num = mapped_loc_num
 
+                topic['location'] = f"S{new_loc_num}"
+                aligned_toc_part.append(topic)
+            
+            return aligned_toc_part
+           
         # TOC processing
         print(f'... Creating TOC with {self.light_model}')
         
         complete_toc_parts = []
         for chunk_key, chunk_data in tqdm(self.chunks.items()):
             result = llms.call_llm(
-                template=prompts.build_prompt_for_topics(
+                prompt=prompts.build_prompt(
+                    template=prompts.GET_TOPICS,
                     first_sentence=chunk_data['s_ids'][0],
                     last_sentence=chunk_data['s_ids'][-1],
                     language=self.language_string,
@@ -191,7 +209,7 @@ class DygestProcessor(DygestBaseParams):
                 model=self.light_model,
                 temperature=self.temperature,
                 sleep_time=self.sleep
-            )
+                )
             
             # Validate for correct JSON format
             toc_part = utils.validate_summaries(result)
@@ -214,20 +232,21 @@ class DygestProcessor(DygestBaseParams):
             key='topic',
             threshold=self.sim_threshold,
             verbose=self.verbose
-        )
+            )
         filtered_toc_parts = sp.get_filtered_summaries()
 
         # Post-Processing: Create TOC
         print(f'... Compiling TOC with {self.expert_model}')
         toc = llms.call_llm(
-            template=prompts.build_prompt_for_toc(
+            prompt=prompts.build_prompt(
+                template=prompts.CREATE_TOC,
                 toc_parts=str(filtered_toc_parts),
                 language=self.language_string
                 ),
             model=self.expert_model,
             temperature=self.temperature,
             sleep_time=self.sleep
-        )
+            )
         final_toc = utils.validate_summaries(toc)
         
         return final_toc
@@ -242,14 +261,15 @@ class DygestProcessor(DygestBaseParams):
         keywords = []
         for chunk_key, chunk_data in tqdm(self.chunks.items()):
             result = llms.call_llm(
-                template=prompts.build_prompt_for_summary_and_keywords(
+                prompt=prompts.build_prompt(
+                    template=prompts.CREATE_SUMMARY_AND_KEYWORDS,
                     text_chunk=chunk_data['text'],
                     language=self.language_string
                     ),
                 model=self.light_model,
                 temperature=self.temperature,
                 sleep_time=self.sleep
-            )
+                )
             
             # Validate
             validated_result = utils.validate_summaries(result)
@@ -267,13 +287,14 @@ class DygestProcessor(DygestBaseParams):
                 
         print(f'... Harmonizing summaries with {self.expert_model}')
         final_summary = llms.call_llm(
-                template=prompts.build_prompt_for_combined_summaries(
-                    summaries='\n'.join(summaries),
-                    language=self.language_string
-                    ),
-                model=self.expert_model,
-                temperature=self.temperature,
-                sleep_time=self.sleep
+            prompt=prompts.build_prompt(
+                template=prompts.COMBINE_SUMMARIES,
+                summaries='\n'.join(summaries),
+                language=self.language_string
+                ),
+            model=self.expert_model,
+            temperature=self.temperature,
+            sleep_time=self.sleep 
             )
         
         # Create a unique set of keywords
@@ -287,7 +308,7 @@ class DygestProcessor(DygestBaseParams):
             key='topic',
             threshold=self.sim_threshold,
             verbose=self.verbose
-        )
+            )
         filtered_keywords = sp.get_filtered_keywords()
         
         return final_summary, filtered_keywords
@@ -301,15 +322,15 @@ class DygestProcessor(DygestBaseParams):
         summaries = []
         for chunk_key, chunk_data in tqdm(self.chunks.items()):
             summary = llms.call_llm(
-                template=prompts.build_prompt_for_summary(
+                prompt=prompts.build_prompt(
+                    template=prompts.CREATE_SUMMARY,
                     text_chunk=chunk_data['text'],
                     language=self.language_string
                     ),
                 model=self.light_model,
                 temperature=self.temperature,
                 sleep_time=self.sleep
-            )
-            # Append
+                )
             summaries.append(summary)
             
             if self.verbose:
@@ -318,13 +339,14 @@ class DygestProcessor(DygestBaseParams):
                 
         print(f'... Harmonizing summaries with {self.expert_model}')
         final_summary = llms.call_llm(
-                template=prompts.build_prompt_for_combined_summaries(
-                    summaries='\n'.join(summaries),
-                    language=self.language_string
-                    ),
-                model=self.expert_model,
-                temperature=self.temperature,
-                sleep_time=self.sleep
+            prompt=prompts.build_prompt(
+                template=prompts.COMBINE_SUMMARIES,
+                summaries='\n'.join(summaries),
+                language=self.language_string
+                ),
+            model=self.expert_model,
+            temperature=self.temperature,
+            sleep_time=self.sleep
             )
         
         return final_summary
@@ -338,14 +360,15 @@ class DygestProcessor(DygestBaseParams):
         keywords_for_doc = []
         for chunk_key, chunk_data in tqdm(self.chunks.items()):
             keywords_for_chunk = llms.call_llm(
-                template=prompts.build_prompt_for_keywords(
+                prompt=prompts.build_prompt(
+                    template=prompts.CREATE_KEYWORDS,
                     text_chunk=chunk_data['text'],
                     language=self.language_string
-                ),
+                    ),
                 model=self.light_model,
                 temperature=self.temperature,
                 sleep_time=self.sleep
-            )
+                )
             keywords_for_doc.append(keywords_for_chunk.split(','))
             
             if self.verbose:
@@ -363,7 +386,7 @@ class DygestProcessor(DygestBaseParams):
             key='topic',
             threshold=self.sim_threshold,
             verbose=self.verbose
-        )
+            )
         filtered_keywords = sp.get_filtered_keywords()
 
         return filtered_keywords

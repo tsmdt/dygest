@@ -1,8 +1,12 @@
 [![PyPI version](https://badge.fury.io/py/dygest.svg)](https://badge.fury.io/py/dygest)
 
-# 🌞 DYGEST: Document Insights Generator
+# 🌞 dygest: Document Insights Generator
 > [!NOTE] 
 **dygest** is a text analysis tool that extracts insights from `.txt` files, generating summaries, keywords, TOCs, and performing Named Entity Recognition (NER).
+
+<p align="center">
+  <img src="./assets/dygest_html.png" width="100%">
+</p>
 
 ## Info
 **dygest** was created to gain fast insights into longer transcripts of audio and video content by retrieving relevant topics and providing an easy to use HTML interface with short cuts from summaries to corresponding text chunks. NER processing further enhances those insights by identifying names of individuals, organisations, locations etc.
@@ -29,11 +33,6 @@
   By default `dygest` will create a `.html` file that can be viewed in standard browsers and combines summaries, keywords, TOC and NER for your text. It features a text editor for you to make further changes.
   
 - **Export Formats**: `.json` `.csv` `.html`
-
-
-<p align="center">
-  <img src="./assets/dygest_html.png" width="80%">
-</p>
 
 ## Requirements
 - 🐍 Python `>=3.10` 
@@ -132,21 +131,174 @@ Run the **dygest** LLM pipeline with the `dygest run` command:
 
  Create insights for your documents (summaries, keywords, TOCs).
 
-╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --files            -f         TEXT             Path to the input folder or .txt file. [default: None]                                    │
-│ --output_dir       -o         TEXT             If not provided, outputs will be saved in the input folder. [default: None]               │
-│ --export_format    -ex        [json|csv|html]  Set the data format for exporting. [default: html]                                        │
-│ --toc              -t                          Create a Table of Contents (TOC) for the text. Defaults to False.                         │
-│ --summarize        -s                          Include a short summary for the whole text. Defaults to False.                            │
-│ --keywords         -k                          Create descriptive keywords for the text. Defaults to False.                              │
-│ --sim_threshold    -sim       FLOAT            Similarity threshold for removing duplicate topics. [default: 0.85]                       │
-│ --verbose          -v                          Enable verbose output. Defaults to False.                                                 │
-│ --export_metadata  -meta                       Enable exporting metadata to output file(s). Defaults to False.                           │
-│ --help                                         Show this message and exit.                                                               │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --files            -f         TEXT                 Path to the input folder or .txt file. [default: None]                       │
+│ --output_dir       -o         TEXT                 If not provided, outputs will be saved in the input folder. [default: None]  │
+│ --export_format    -ex        [all|json|csv|html]  Set the data format for exporting. [default: html]                           │
+│ --toc              -t                              Create a Table of Contents (TOC) for the text. Defaults to False.            │
+│ --summarize        -s                              Include a short summary for the text. Defaults to False.                     │
+│ --keywords         -k                              Create descriptive keywords for the text. Defaults to False.                 │
+│ --sim_threshold    -sim       FLOAT                Similarity threshold for removing duplicate topics. [default: 0.85]          │
+│ --verbose          -v                              Enable verbose output. Defaults to False.                                    │
+│ --export_metadata  -meta                           Enable exporting metadata to output file(s). Defaults to False.              │
+│ --help                                             Show this message and exit.                                                  │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
+
+## Export formats
+
+### Example for `JSON` output
+
+```json
+{
+    "filename": "Embeddings_What_they_are_and_why_they_matter_en",
+    "output_filepath": "output/Embeddings_What_they_are_and_why_they_matter_en.json",
+    "input_text": "So Simon Wilson is going to be our last speaker before our break. So let's delve into ...",  # Full input text is abbreviated in this example
+    "language": "en",
+    "chunk_size": 1000,
+    "token_count": 8705,
+    "light_model": "ollama/qwen2.5:3b",
+    "expert_model": "groq/llama-3.3-70b-versatile",
+    "summary": "Embeddings, a technology used in large language models, represent text as numerical vectors, allowing for the understanding of concepts and relationships between them. This technology is utilized in various applications, including semantic searches, content recommendation, and text analysis. Researchers and developers, such as Simon Wilson, have demonstrated the potential of embeddings in creating systems that serve up related content and identify similar articles based on their similarity scores. The use of embeddings has also been explored in other areas, including geospatial SQL queries, image embedding, and audio incorporation. Overall, embeddings have become a fundamental component in the development of language models and AI frameworks, enabling advanced capabilities such as retrieval augmented generation and dimension reduction.",
+    "keywords": [
+        "large language models",
+        "GeoPoly",
+        "SQLite",
+        "text representation",
+        "Embedding vectors",
+        "Similarity scores",
+        "clustering",
+        "geospatial SQL",
+        "text clustering",
+        "Serverless hosting",
+        "text search",
+        "OpenAI API",
+        "Word2Vec",
+        "semantic search",
+        "browser compatibility",
+        "related content",
+        "retrieval augmented generation",
+        "vibebased search",
+        "code functions",
+        "ImageBind",
+        "function lookup",
+        "Faucet Finder",
+        "Clip",
+        "vector databases",
+        "LangChain",
+        "PCA",
+        "blog question answering",
+        "concrete vs abstract",
+        "TIL blog",
+        "LLM",
+        "GeoPackage",
+        "GitHub Actions",
+        "multimodal"
+    ],
+    "toc": [
+        {
+            "headline": "Embeddings and Similarity",
+            "topics": [
+                {
+                    "summary": "Understanding Embeddings in Data Exploration",
+                    "location": "S4"
+                },
+                {
+                    "summary": "Using Embeddings for Similarity Analysis",
+                    "location": "S85"
+                },
+                {
+                    "summary": "OpenAI API for Embeddings",
+                    "location": "S86"
+                },
+                {
+                    "summary": "Analyzing Text for Clusters and Embeddings",
+                    "location": "S316"
+                },
+                {
+                    "summary": "Flexible Embedding Tools",
+                    "location": "S407"
+                }
+            ]
+        },
+        {
+            "headline": "Data Journalism and Tools",
+            "topics": [
+                {
+                    "summary": "Simon Wilson's Background and Achievements",
+                    "location": "S20"
+                }
+            ]
+        },
+        {
+            "headline": "Geospatial and SQL",
+            "topics": [
+                {
+                    "summary": "Geospatial SQL Queries Overview",
+                    "location": "S43"
+                }
+            ]
+        },
+        {
+            "headline": "Serverless and Hosting",
+            "topics": [
+                {
+                    "summary": "Bake-to-Data Architecture Pattern",
+                    "location": "S122"
+                }
+            ]
+        },
+        {
+            "headline": "Language Models and Search",
+            "topics": [
+                {
+                    "summary": "LLM Command-Line Utility",
+                    "location": "S123"
+                },
+                {
+                    "summary": "Vibe-Based Semantic Search for Readmes",
+                    "location": "S222"
+                },
+                {
+                    "summary": "Image-Text Similarity in Browser",
+                    "location": "S223"
+                },
+                {
+                    "summary": "Vibes-based search for faucets and other items",
+                    "location": "S265"
+                }
+            ]
+        },
+        {
+            "headline": "Databases and Indexing",
+            "topics": [
+                {
+                    "summary": "Specialized Indexing Solutions",
+                    "location": "S355"
+                }
+            ]
+        },
+        {
+            "headline": "Multimodal and Browser",
+            "topics": [
+                {
+                    "summary": "Fascinating Multimodal Space",
+                    "location": "S408"
+                },
+                {
+                    "summary": "Smaller and More Accessible",
+                    "location": "S426"
+                }
+            ]
+        }
+    ]
+}
+````
+
 ## Acknowledgments
+
 **dygest** uses great python packages:
+
 - `litellm`: https://github.com/BerriAI/litellm
 - `flair`: https://github.com/flairNLP/flair
 - `typer`: https://github.com/fastapi/typer

@@ -1,3 +1,13 @@
+### Function for building prompts with kwargs ###
+
+def build_prompt(template, **kwargs):
+    prompt = template
+    for key, value in kwargs.items():
+        placeholder = '{' + key + '}'
+        prompt = prompt.replace(placeholder, value)
+    return prompt
+
+
 ### TOC CREATION ###
 
 GET_TOPICS =  """You will be given a text composed of multiple sentences. The sentences are numbered sequentially:
@@ -10,7 +20,8 @@ Your tasks:
 1. Identify the top 2 most important topics discussed in the text.
   - Each topic name should be a concise phrase (no more than 5 words).
 2. For each topic, generate a precise sub-headline (no more than 8 words) with key details.
-3. Return results as JSON **IN {language}**. Do NOT add anything else and use this template without any alterations:
+3. Count the sentences to give a **precise sentence number** as location for the identified topics.
+4. Return results as JSON **IN {language}**. Do NOT add anything else and use this template without any alterations:
   
 [
   {
@@ -136,43 +147,3 @@ Return **ONLY the comma-separated keywords** and **nothing else**.
 **Text Chunk:**
 {text_chunk}
 """
-
-### Functions ####
-
-def build_prompt_for_topics(first_sentence, last_sentence, language, chunk):
-    prompt = GET_TOPICS
-    prompt = prompt.replace('{first_sentence}', first_sentence)
-    prompt = prompt.replace('{last_sentence}', last_sentence)
-    prompt = prompt.replace('{language}', language)
-    prompt = prompt.replace('{chunk}', chunk)
-    return prompt
-  
-def build_prompt_for_toc(toc_parts, language):
-    prompt = CREATE_TOC
-    prompt = prompt.replace('{toc_parts}', toc_parts)
-    prompt = prompt.replace('{language}', language)
-    return prompt
-  
-def build_prompt_for_summary(text_chunk, language):
-    prompt = CREATE_SUMMARY
-    prompt = prompt.replace('{text_chunk}', text_chunk)
-    prompt = prompt.replace('{language}', language)
-    return prompt
-  
-def build_prompt_for_summary_and_keywords(text_chunk, language):
-    prompt = CREATE_SUMMARY_AND_KEYWORDS
-    prompt = prompt.replace('{text_chunk}', text_chunk)
-    prompt = prompt.replace('{language}', language)
-    return prompt
-  
-def build_prompt_for_combined_summaries(summaries, language):
-    prompt = COMBINE_SUMMARIES
-    prompt = prompt.replace('{summaries}', summaries)
-    prompt = prompt.replace('{language}', language)
-    return prompt
-  
-def build_prompt_for_keywords(text_chunk, language):
-    prompt = CREATE_KEYWORDS
-    prompt = prompt.replace('{text_chunk}', text_chunk)
-    prompt = prompt.replace('{language}', language)
-    return prompt

@@ -16,8 +16,7 @@ def get_api_base(model_name: str) -> Optional[str]:
     return api_base_mappings.get(provider, None)
 
 def call_llm(
-    template: str = None, 
-    text_input: str = None, 
+    prompt: str = None, 
     model: str = None, 
     temperature: float = 0.1, 
     api_key: str = None,
@@ -29,22 +28,22 @@ def call_llm(
     Note: Set the environment variable for the chosen provider's API key.
     
     Parameters:
-    - template: The prompt template key (e.g., 'summarize')
+    - prompt: The prompt template
     - text_input: The input text to be summarized or processed
     - model: The LLM model (e.g., 'openai/gpt-3.5-turbo', 'anthropic/claude-2', 'huggingface/...', 'ollama/...') 
     - temperature: The LLM sampling temperature
     - api_base: Optional API base URL for some models (like Ollama or custom Hugging Face endpoints)
     """
-    # messages = [{"role": "user", "content": f"{template} {text_input}"}]
-    messages = [{"role": "user", "content": f"{template}"}]
-
     if not api_base:
         api_base = get_api_base(model)
 
     try:
         response = completion(
             model=model,
-            messages=messages,
+            messages=[{
+                "role": "user", 
+                "content": f"{prompt}"
+                }],
             temperature=temperature,
             api_key=api_key,
             api_base=api_base

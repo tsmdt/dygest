@@ -219,25 +219,25 @@ config* and set your LLMs.")
         proc.process_file(file)
 
         # Write output
-        # try:
-        formats_to_export = (
-            [ExportFormats.CSV, ExportFormats.JSON, ExportFormats.HTML]
-            if proc.export_format == ExportFormats.ALL
-            else [proc.export_format]
-        )
-        
-        for format in formats_to_export:
-            proc.export_format = format
-            writer = output_utils.get_writer(proc)
-            print(f'... Writing {proc.export_format.name.upper()}')
+        try:
+            formats_to_export = (
+                [ExportFormats.CSV, ExportFormats.JSON, ExportFormats.HTML]
+                if proc.export_format == ExportFormats.ALL
+                else [proc.export_format]
+            )
+            
+            for format in formats_to_export:
+                proc.export_format = format
+                writer = output_utils.get_writer(proc)
+                print(f'... Writing {proc.export_format.name.upper()}')
 
-            write_method = getattr(writer, 'write', None)
-            write_method()
+                write_method = getattr(writer, 'write', None)
+                write_method()
                 
-        # except ValueError as ve:
-        #     print(f'... {ve}')
-        # except Exception as e:
-        #     print(f'... An unexpected error occurred: {e}')
+        except ValueError as ve:
+            print(f'... {ve}')
+        except Exception as e:
+            print(f'... An unexpected error occurred: {e}')
 
 if __name__ == '__main__':
     app()

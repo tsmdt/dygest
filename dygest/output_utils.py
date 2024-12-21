@@ -463,29 +463,6 @@ class HTMLWriter(WriterBase):
                     }
                 )
                 current_parent.append(anchor_tag)
-                
-            # elif event_type == 'insert_anchor':
-            #     # Close any open spans before ending the paragraph
-            #     spans_stack.clear()
-            #     current_parent = p_tag  
-                
-            #     # Add the current paragraph to the content if it has any children
-            #     if p_tag.contents:
-            #         content_elements.append(p_tag)
-                
-            #     # Create a new paragraph after inserting anchor if no speakers
-            #     if not self.has_speaker:
-            #         p_tag = self.soup.new_tag('p')
-            #         current_parent = p_tag
-                
-            #     # Insert the anchor tag directly into the content
-            #     anchor_tag = self.soup.new_tag(
-            #         "a", 
-            #         id=data,
-            #         attrs={
-            #             "class": "anchor"
-            #         })
-            #     content_elements.append(anchor_tag)
             
             elif event_type == 'insert_linebreak':
                 # Close any open spans before ending the paragraph

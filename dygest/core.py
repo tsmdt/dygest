@@ -57,7 +57,7 @@ class DygestProcessor(DygestBaseParams):
         if not self.output_dir.exists():
             self.output_dir.mkdir(parents=True)
             if self.verbose:
-                print(f"... Created output directory at {self.output_dir}")
+                print(f"... Created output directory at {self.output_dir}") 
 
     def run_language_detection(self, file: Path) -> str:
         """

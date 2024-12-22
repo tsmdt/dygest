@@ -525,7 +525,7 @@ class HTMLWriter(WriterBase):
     def save_html(self):
         with open(self.output_filepath, 'w', encoding='utf-8') as fout:
             fout.write(str(self.soup))
-        print(f"... 🌞 Saved {self.output_filepath}.")
+        print(f"... 🌞 Saved {self.output_filepath}")
 
 
 @dataclass
@@ -565,7 +565,7 @@ class CSVWriter(WriterBase):
                     self.toc if self.toc else None
                 ]
             )
-        print(f"... 🌞 Saved {self.output_filepath}.")
+        print(f"... 🌞 Saved {self.output_filepath}")
 
 
 @dataclass
@@ -589,7 +589,7 @@ class JSONWriter(WriterBase):
                 'toc': self.toc if self.toc else None
             }
             json.dump(json_dict, fout, indent=4)
-        print(f"... 🌞 Saved {self.output_filepath}.")
+        print(f"... 🌞 Saved {self.output_filepath}")
 
 
 def get_writer(proc):

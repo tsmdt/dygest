@@ -34,6 +34,7 @@ class WriterBase:
     output_filepath: Path = field(default=None, init=True)
     input_text: str = field(default=None, init=True)
     chunk_size: int = field(default=None, init=True)
+    chunks: dict = field(default=None, init=True)
     named_entities: list = field(default=None, init=True)
     toc: list[dict] = field(default=None, init=True)
     summary: str = field(default=None, init=True)
@@ -538,12 +539,13 @@ class CSVWriter(WriterBase):
             csv_header = [
                 'filename',
                 'output_filepath',
-                'input_text',
+                # 'input_text',
                 'language',
                 'chunk_size',
                 'token_count',
                 'light_model',
                 'expert_model',
+                'chunks',
                 'summary' if self.summary else None,
                 'keywords' if self.keywords else None,
                 'toc' if self.toc else None
@@ -554,12 +556,12 @@ class CSVWriter(WriterBase):
                 [
                     self.filename,
                     self.output_filepath,
-                    self.input_text,
                     self.language,
                     self.chunk_size,
                     self.token_count,
                     self.light_model,
                     self.expert_model,
+                    self.chunks,
                     self.summary if self.summary else None,
                     self.keywords if self.keywords else None,
                     self.toc if self.toc else None
@@ -578,12 +580,12 @@ class JSONWriter(WriterBase):
             json_dict = {
                 'filename': self.filename,
                 'output_filepath': str(self.output_filepath),
-                'input_text': self.input_text,
                 'language': self.language,
                 'chunk_size': self.chunk_size,
                 'token_count': self.token_count,
                 'light_model': self.light_model,
                 'expert_model': self.expert_model,
+                'chunks': self.chunks,
                 'summary': self.summary if self.summary else None,
                 'keywords': self.keywords if self.keywords else None,
                 'toc': self.toc if self.toc else None
@@ -625,6 +627,7 @@ def get_writer(proc):
         'filename': proc.filename,
         'input_text': proc.text,
         'chunk_size': proc.chunk_size,
+        'chunks': proc.chunks,
         'named_entities': proc.entities if proc.add_ner else None,
         'toc': proc.toc if proc.add_toc else None,
         'summary': proc.summaries if proc.add_summaries else None,

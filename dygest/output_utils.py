@@ -277,8 +277,14 @@ class HTMLWriter(WriterBase):
         
         # Add TOC heading
         if self.toc:
-            div_additional_controls = self.soup.find('div', class_='additional-controls')
-            div_summaries = self.soup.new_tag('div', attrs={'class': 'summaries'})
+            div_additional_controls = self.soup.find(
+                'div', 
+                class_='additional-controls'
+                )
+            div_summaries = self.soup.new_tag(
+                'div', 
+                attrs={'class': 'summaries'}
+                )
             
             div_summaries_content = self.soup.new_tag(
                 'div',
@@ -324,7 +330,7 @@ class HTMLWriter(WriterBase):
                     # Get location to create a link to the content
                     location = topic.get('location')
                     if location:
-                        link_id = f"location_{location}"
+                        link_id = f"location-{location}"
                         link_tag = self.soup.new_tag("a", href=f"#{link_id}")
                         link_tag.string = f"{topic['summary'].rstrip('.,;:?!')}"
                         topic_li.append(link_tag)
@@ -336,12 +342,11 @@ class HTMLWriter(WriterBase):
                 ol_tag.append(li_tag)
 
 
-        ### Content Processing ###     
+        ## Main Content
         
         events = []
         
-        ### 1. Collect NER events ###
-        
+        ### 1. Collect NER events
         if self.named_entities:
             for entity in self.named_entities:
                 entity_start = entity['start']
@@ -356,23 +361,7 @@ class HTMLWriter(WriterBase):
                 events.append((entity_start, 'start_entity', entity_ner_tag))
                 events.append((entity_end, 'end_entity', None))
         
-        ### 2. Collect anchor tag events for TOC (now using sentence_offsets) ###
-        
-        inserted_locations = set()
-        if self.toc:
-            for item in self.toc:
-                for topic in item['topics']:
-                    location = topic.get('location')
-                    if location and location not in inserted_locations:
-                        # Instead of searching text, we directly use sentence_offsets
-                        if location in self.sentence_offsets:
-                            start = self.sentence_offsets[location]
-                            anchor_id = f"location_{location}"
-                            events.append((start, 'insert_anchor', anchor_id))
-                            inserted_locations.add(location)
-        
-        ### 3. Match timestamp / speaker patterns ###
-        
+        ### 2. Match timestamp / speaker patterns
         pattern = r'\[\d{2}:\d{2}:\d{2}\.\d{3}\] \[(?:SPEAKER_\d+|UNKNOWN)\]|\[(?:SPEAKER_\d+|UNKNOWN)\]'
         
         for match in re.finditer(pattern, self.input_text):
@@ -382,6 +371,31 @@ class HTMLWriter(WriterBase):
             events.append((end, 'end_speaker', None))
             self.has_speaker = True  
         
+        ### 3. Collect anchor tag events for TOC (now using sentence_offsets)
+        inserted_locations = set()
+        if self.toc:
+            for item in self.toc:
+                for topic in item['topics']:
+                    location = topic.get('location')
+                    if location and location not in inserted_locations:
+                        # Check if location (e.g. "S12") in sentence_offsets
+                        if location in self.sentence_offsets:
+                            start = self.sentence_offsets[location]
+                            anchor_id = f"location-{location}"
+                            events.append((start, 'insert_anchor', anchor_id))
+                            inserted_locations.add(location)
+                            
+                            # Do not insert a linebreak if speaker tag was found
+                            if self.has_speaker:
+                                continue
+                            
+                            events.append((start, 'insert_linebreak', None))
+        
+        ### 4. Insert linebreak events for each "\n"
+        for match in re.finditer(r'\n{2}', self.input_text):
+            events.append((match.start(), 'insert_linebreak', None))
+            
+                        
         # Define event order to handle conflicts
         event_order = {
             'end_entity': 0,
@@ -514,19 +528,139 @@ class HTMLWriter(WriterBase):
         if p_tag.contents:
             content_elements.append(p_tag)
         
-        # Replace the old paragraph with the new content
-        old_p_tag = self.soup.p
+        # Write the new content
+        content_div = self.soup.find('div', class_='content')
         for element in content_elements:
-            old_p_tag.insert_before(element)
-        old_p_tag.decompose()
+            content_div.append(element)
 
-        # Ensure readability of HTML
+        # Transform any markdown tags to HTML
+        self.transform_markdown_tags()
+        
+    def transform_markdown_tags(self):
+        """
+        Transforms markdown syntax within the main content of the HTML template
+        to corresponding HTML tags.
+        """
+        # Locate the main content div
+        main_content = self.soup.find('div', class_='content')
+        if not main_content:
+            print(f"""... No <div class="content"> in HTML.""")
+            return
+
+        markdown_patterns = {
+            'horizontal_rule': re.compile(r'^-{3,}$', re.MULTILINE),
+            'blockquotes': re.compile(r'^>\s?(.*)', re.MULTILINE),
+            'headings': re.compile(r'^(#{1,6})\s*(.+)', re.MULTILINE),
+            'ordered_list': re.compile(r'^(\s*)\d+\.\s+(.*)', re.MULTILINE),
+            'unordered_list': re.compile(r'^(\s*)[-\*\+]\s+(.*)', re.MULTILINE),
+            'images': re.compile(r'!\[([^\]]*)\]\(([^\)]+)\)'),
+            'links': re.compile(r'\[([^\]]+)\]\(([^\)]+)\)'),
+            'inline_code': re.compile(r'`([^`]*)`'),
+            'bold': re.compile(r'(\*\*|__)(.*?)\1'),
+            'italics': re.compile(r'(\*|_)(.*?)\1'),
+            'strikethrough': re.compile(r'~~(.*?)~~'),
+        }
+
+        def replace_heading(match):
+            hashes, text = match.groups()
+            level = len(hashes)
+            return f'<h{level}>{text.strip()}</h{level}>'
+
+        def replace_ordered_list(match):
+            indent, item = match.groups()
+            return f'{indent}<ol><li>{item.strip()}</li></ol>'
+
+        def replace_unordered_list(match):
+            indent, item = match.groups()
+            return f'{indent}<ul><li>{item.strip()}</li></ul>'
+
+        # Convert the main_content to a string for regex operations
+        content_html = str(main_content)
+
+        # Apply horizontal rule transformation first to avoid conflicts
+        content_html = markdown_patterns['horizontal_rule'].sub(
+            '<hr/>', 
+            content_html
+            )
+
+        # Blockquotes
+        content_html = markdown_patterns['blockquotes'].sub(
+            r'<blockquote>\1</blockquote>', 
+            content_html
+            )
+
+        # Headings
+        content_html = markdown_patterns['headings'].sub(
+            replace_heading, 
+            content_html
+            )
+
+        # Lists
+        content_html = markdown_patterns['ordered_list'].sub(
+            replace_ordered_list, 
+            content_html
+            )
+        
+        content_html = markdown_patterns['unordered_list'].sub(
+            replace_unordered_list, 
+            content_html
+            )
+
+        # Images
+        content_html = markdown_patterns['images'].sub(
+            r'<img alt="\1" src="\2" />', 
+            content_html
+            )
+
+        # Links
+        content_html = markdown_patterns['links'].sub(
+            r'<a href="\2">\1</a>', 
+            content_html
+            )
+
+        # Inline code
+        content_html = markdown_patterns['inline_code'].sub(
+            r'<code>\1</code>', 
+            content_html
+            )
+
+        # Bold text
+        content_html = markdown_patterns['bold'].sub(
+            r'<strong>\2</strong>', 
+            content_html
+            )
+
+        # Italics
+        content_html = markdown_patterns['italics'].sub(
+            r'<em>\2</em>', 
+            content_html
+            )
+
+        # Strikethrough
+        content_html = markdown_patterns['strikethrough'].sub(
+            r'<del>\1</del>', 
+            content_html
+            )
+
+        # Parse the transformed HTML with BeautifulSoup
+        transformed_soup = BeautifulSoup(content_html, 'html.parser')
+        
+        # Clean empty <p> tags
+        for p in transformed_soup.find_all('p'):
+            if not p.get_text(strip=True) or p.get_text(strip=True) == '\n':
+                p.decompose()
+
+        # Replace the original main_content with the transformed content
+        main_content.clear()
+        for element in transformed_soup.contents:
+            main_content.append(element)
+
         self.soup.prettify(formatter='html')
 
     def save_html(self):
         with open(self.output_filepath, 'w', encoding='utf-8') as fout:
             fout.write(str(self.soup))
-        print(f"... 🌞 Saved {self.output_filepath}")
+        print(f"... 🌞 Saved HTML → {self.output_filepath}")
 
 
 @dataclass
@@ -539,7 +673,6 @@ class CSVWriter(WriterBase):
             csv_header = [
                 'filename',
                 'output_filepath',
-                # 'input_text',
                 'language',
                 'chunk_size',
                 'token_count',
@@ -567,14 +700,14 @@ class CSVWriter(WriterBase):
                     self.toc if self.toc else None
                 ]
             )
-        print(f"... 🌞 Saved {self.output_filepath}")
+        print(f"... 🌞 Saved CSV → {self.output_filepath}")
 
 
 @dataclass
 class JSONWriter(WriterBase):
     """
     Class for writing JSON output.
-    """
+    """    
     def write(self):
         with open(str(self.output_filepath), 'w', encoding='utf-8') as fout:
             json_dict = {
@@ -591,8 +724,8 @@ class JSONWriter(WriterBase):
                 'toc': self.toc if self.toc else None
             }
             json.dump(json_dict, fout, indent=4)
-        print(f"... 🌞 Saved {self.output_filepath}")
-
+        print(f"... 🌞 Saved JSON → {self.output_filepath}")
+        
 
 def get_writer(proc):
     """

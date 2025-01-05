@@ -1,8 +1,23 @@
 import json
 import re
 import json_repair
+
+from rich import print
 from typing import Optional
 from pathlib import Path
+
+
+VALID_FILE_FORMATS = [
+    '.txt',
+    '.csv',
+    '.xlsx',
+    '.doc',
+    '.docx',
+    '.pdf',
+    '.json',
+    '.html',
+    '.xml'
+]
 
 
 def resolve_input_dir(filepath: str = None, output_dir: str = None) -> Path:
@@ -34,26 +49,84 @@ def load_filepath(filepath: str) -> list[Path]:
         print("... Please provide a valid filepath.")
         return
     elif filepath.is_dir():
-        files_to_process = list(filepath.rglob("*.txt"))
+        files_to_process = []
+        for fpath in list(filepath.glob('*.*')):
+            if Path(fpath).is_file() and Path(fpath).suffix in VALID_FILE_FORMATS:
+                normalized_fpath = normalize_filepath(fpath)
+                files_to_process.append(normalized_fpath)
+            else:
+                print(f"File {fpath} has a non valid file format ([bold]{', '.join(VALID_FILE_FORMATS)}).")
+                
         if not files_to_process:
-            print("... No .txt files found in the directory.")
+            print("... No files with valid file formats found in the directory.")
             return
     else:
         files_to_process = [filepath]
+        
     return files_to_process
 
-def load_txt_file(file_path: str) -> str:
+def normalize_filepath(filepath: Path) -> Path:
     """
-    Load files but omit Byte Order Marks (BOM) at start of the string.
+    Normalizes the filepath by replacing non-word characters with underscores,
+    collapsing multiple underscores into one, and removing leading/trailing underscores.
     """
-    import codecs
-
-    with codecs.open(file_path, 'r', encoding='utf-8-sig') as file:
-        return file.read().strip()
+    new_filename = re.sub(r'\W+', '_', filepath.stem)
+    new_filename = new_filename.strip('_')
+    new_filename = re.sub(r'_+', '_', new_filename)
     
-def remove_hyphens(text: str) -> str:
-    return re.sub(r'[=-⸗–]\n', '', text)
+    suffix = filepath.suffix.lower()
+    
+    # Construct the new path
+    new_path = filepath.parent / f"{new_filename}{suffix}"
+    
+    # Rename the file
+    filepath.rename(new_path)
 
+    return new_path.resolve()
+
+def dehyphenate(text: str) -> str:
+    """
+    Remove hyphenation caused by line breaks.
+    """
+    return re.sub(r'-\s*\n\s*', '', text)
+
+def remove_linebreaks(text: str) -> str:
+    """
+    Remove linebreaks that cut sentences.
+    """
+    return re.sub(r"([A-Za-z0-9\.,:;!“”'\?])\n([A-Za-z0-9\.,:;!“”'\?])", r'\1 \2', text)
+
+def load_file(fpath: str) -> str:
+    """
+    Load file and convert it to Markdown, then clean the text.
+    
+    Parameters:
+    - fpath: Path to the input file.
+
+    TODO: Better handling of PDF layout issues (redundant headers, footers etc.)
+    """
+    from markitdown import MarkItDown
+    
+    md = MarkItDown()
+    
+    print(f"... Converting {Path(fpath).name} to Markdown")
+    result = md.convert(str(fpath))
+    
+    # Clean multiple whitespaces
+    raw_text = re.sub(r' {2,}', ' ', result.text_content)
+        
+    # Check if the file is a PDF
+    if Path(fpath).suffix.lower() == '.pdf':
+        print("... Performing PDF-specific cleaning.")
+        
+        raw_text = dehyphenate(raw_text)
+        print("    - Dehyphenation completed.")
+        
+        raw_text = remove_linebreaks(raw_text)
+        print("    - Linebreaks removed.")
+    
+    return raw_text
+    
 def remove_punctuation(text: str) -> str:
     return re.sub(r'[^\w\s]', '', text)
 
@@ -83,7 +156,6 @@ def chunk_text(
     """
     import tiktoken
     from flair.splitter import SegtokSentenceSplitter
-    import re
 
     tokenizer = tiktoken.get_encoding("gpt2")
 
@@ -108,7 +180,7 @@ def chunk_text(
 
     for sentence in sentences:
         # Find the offset of this sentence in the original text
-        start_index = text.index(sentence.text, current_search_pos)
+        start_index = text.index(sentence.text[:30], current_search_pos)
         sentence_offsets[f"S{sentence_id}"] = start_index
         current_search_pos = start_index + len(sentence.text)
         sentence_id += 1
@@ -162,8 +234,11 @@ def chunk_text(
 def sort_summaries_by_key(summaries: list[dict], key: str) -> list[dict]:
     return sorted(summaries, key=lambda x: x[key])
 
-def chunk_summaries(summaries: list[dict], limit: int = 15, 
-                    sort_by_key: str = None) -> list[list[dict]]:
+def chunk_summaries(
+    summaries: list[dict], 
+    limit: int = 15, 
+    sort_by_key: str = None
+    ) -> list[list[dict]]:
     if sort_by_key:
         summaries = sort_summaries_by_key(summaries, sort_by_key)
 

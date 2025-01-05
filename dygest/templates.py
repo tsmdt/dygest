@@ -152,6 +152,23 @@ HTML_CONTENT = """
         width: auto;
         margin-bottom: 15px;
     }
+    
+    h1 {
+        font-size: 34px;
+        line-height: 1.25em;
+    }
+    
+    h2 {
+        font-size: 31px;
+    }
+
+    h3 {
+        font-size: 28px;
+    }
+
+    h4 {
+        font-size: 25px;
+    }
 
     h5 {
         font-size: 22px;
@@ -275,8 +292,7 @@ HTML_CONTENT = """
                 </div>
 
                 <!-- Additional Buttons (Timestamps, NER, saving) -->
-                <div class="additional-controls">
-                </div>
+                <div class="additional-controls"></div>
                 
             </div>
         </div>
@@ -290,13 +306,11 @@ HTML_CONTENT = """
             </div>
             
             <!-- TL;DR -->
-            <div class="tldr">
-            </div>
+            <div class="tldr"></div>
 
             <!-- Main Content -->
-            <div class="content" contenteditable="true">
-                <p></p>
-            </div>
+            <div class="content" contenteditable="true"></div>
+            
         </div>
     </div>
 </div>

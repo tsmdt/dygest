@@ -229,8 +229,6 @@ config* and set your LLMs.")
             for format in formats_to_export:
                 proc.export_format = format
                 writer = output_utils.get_writer(proc)
-                print(f'... Writing {proc.export_format.name.upper()}')
-
                 write_method = getattr(writer, 'write', None)
                 write_method()
                 

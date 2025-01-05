@@ -437,7 +437,7 @@ class DygestProcessor(DygestBaseParams):
 
         # Load file
         self.text = self.run_with_error_handling(
-            utils.load_txt_file, 
+            utils.load_file, 
             file, 
             error_message="Error during file loading"
         )

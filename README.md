@@ -2,7 +2,7 @@
 
 # 🌞 dygest: Document Insights Generator
 > [!NOTE] 
-**dygest** is a text analysis tool that extracts insights from `.txt` files, generating summaries, keywords, TOCs, and performing Named Entity Recognition (NER).
+**dygest** is a text analysis tool that extracts insights from documents, generating summaries, keywords, TOCs, and performing Named Entity Recognition (NER).
 
 <p align="center">
   <img src="./assets/dygest_html.png" width="100%">
@@ -31,8 +31,10 @@
   
 - **User-friendly HTML Editor**  
   By default `dygest` will create a `.html` file that can be viewed in standard browsers and combines summaries, keywords, TOC and NER for your text. It features a text editor for you to make further changes.
+
+- **Input Formats**: `.txt`, `.csv`, `.xlsx`, `.doc`, `.docx`, `.pdf`, `.json`, `.html`, `.xml`
   
-- **Export Formats**: `.json` `.csv` `.html`
+- **Export Formats**: `.json`, `.csv`, `.html`
 
 ## Requirements
 - 🐍 Python `>=3.10` 
@@ -159,3 +161,4 @@ Find an example `.json` output in the [examples folder](examples/embeddings_What
 - `flair`: https://github.com/flairNLP/flair
 - `typer`: https://github.com/fastapi/typer
 - `json_repair`: https://github.com/mangiucugna/json_repair
+- `markitdown`: https://github.com/microsoft/markitdown

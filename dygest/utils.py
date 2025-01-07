@@ -15,7 +15,6 @@ VALID_FILE_FORMATS = [
     '.doc',
     '.docx',
     '.pdf',
-    '.json',
     '.html',
     '.xml'
 ]

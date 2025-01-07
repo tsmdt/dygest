@@ -1,6 +1,7 @@
 import json
 import re
 import json_repair
+import typer
 
 from rich import print
 from typing import Optional
@@ -49,17 +50,17 @@ def load_filepath(filepath: str) -> list[Path]:
         print("... Please provide a valid filepath.")
         return
     elif filepath.is_dir():
-        files_to_process = []
-        for fpath in list(filepath.glob('*.*')):
+        files_to_process = []        
+        for fpath in list(filepath.rglob('*.*')):
             if Path(fpath).is_file() and Path(fpath).suffix in VALID_FILE_FORMATS:
                 normalized_fpath = normalize_filepath(fpath)
                 files_to_process.append(normalized_fpath)
             else:
-                print(f"File {fpath} has a non valid file format ([bold]{', '.join(VALID_FILE_FORMATS)}).")
+                print(f"... Skipping [bold]{fpath}[/bold] as the file format is not supported.")
                 
         if not files_to_process:
             print("... No files with valid file formats found in the directory.")
-            return
+            raise typer.Exit(code=1)
     else:
         files_to_process = [filepath]
         

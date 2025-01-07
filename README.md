@@ -32,7 +32,7 @@
 - **User-friendly HTML Editor**  
   By default `dygest` will create a `.html` file that can be viewed in standard browsers and combines summaries, keywords, TOC and NER for your text. It features a text editor for you to make further changes.
 
-- **Input Formats**: `.txt`, `.csv`, `.xlsx`, `.doc`, `.docx`, `.pdf`, `.json`, `.html`, `.xml`
+- **Input Formats**: `.txt`, `.csv`, `.xlsx`, `.doc`, `.docx`, `.pdf`, `.html`, `.xml`
   
 - **Export Formats**: `.json`, `.csv`, `.html`
 

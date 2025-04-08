@@ -1,3 +1,4 @@
+import re
 import time
 import typer
 from rich import print
@@ -14,6 +15,18 @@ def get_api_base(model_name: str) -> Optional[str]:
     }
     provider = model_name.split('/')[0].lower()
     return api_base_mappings.get(provider, None)
+
+def remove_reasoning(llm_response: str = None) -> str:
+    """
+    Clean <think></think> parts from reasoning models responses.
+    """
+    pattern = r"<think>.*?</think>"
+    return re.sub(
+        pattern, 
+        '', 
+        llm_response.choices[0].message.content,
+        flags=re.DOTALL
+        )
 
 def call_llm(
     prompt: str = None, 
@@ -52,7 +65,10 @@ def call_llm(
         if sleep_time > 0:
             time.sleep(sleep_time)
         
-        return response.choices[0].message.content
+        # Clean <think> responses for reasoning models
+        response = remove_reasoning(response)
+
+        return response
 
     except BadRequestError as e:
         print(f"[purple] ...  Error: Please configure the model(s) your are using with the \

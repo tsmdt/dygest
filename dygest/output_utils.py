@@ -313,7 +313,7 @@ class HTMLWriter(WriterBase):
 
             # Add TOC topics and links
             ol_tag = self.soup.find("ol")
-            
+
             for item in self.toc:
                 # Create a list element for the headline
                 li_tag = self.soup.new_tag("li")
@@ -647,8 +647,12 @@ class HTMLWriter(WriterBase):
         transformed_soup = BeautifulSoup(content_html, 'html.parser')
         
         # Clean empty <p> tags
+        # for p in transformed_soup.find_all('p'):
+        #     if not p.get_text(strip=True) or p.get_text(strip=True) == '\n':
+        #         p.decompose()
         for p in transformed_soup.find_all('p'):
-            if not p.get_text(strip=True) or p.get_text(strip=True) == '\n':
+            # Check if the paragraph has neither text nor any child elements
+            if not p.get_text(strip=True) and not p.find(True, recursive=False):
                 p.decompose()
 
         # Replace the original main_content with the transformed content

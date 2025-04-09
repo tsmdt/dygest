@@ -96,7 +96,7 @@ def remove_linebreaks(text: str) -> str:
     """
     return re.sub(r"([A-Za-z0-9\.,:;!“”'\?])\n([A-Za-z0-9\.,:;!“”'\?])", r'\1 \2', text)
 
-def load_file(fpath: str) -> str:
+def load_file(fpath: str, verbose: bool = False) -> str:
     """
     Load file and convert it to Markdown, then clean the text.
     
@@ -107,9 +107,11 @@ def load_file(fpath: str) -> str:
     """
     from markitdown import MarkItDown
     
+    if verbose:
+        print(f"... Converting to Markdown")
+
+    # Convert to markdown
     md = MarkItDown()
-    
-    print(f"... Converting {Path(fpath).name} to Markdown")
     result = md.convert(str(fpath))
     
     # Clean multiple whitespaces
@@ -117,13 +119,15 @@ def load_file(fpath: str) -> str:
         
     # Check if the file is a PDF
     if Path(fpath).suffix.lower() == '.pdf':
-        print("... Performing PDF-specific cleaning.")
+        if verbose:
+            print("... Performing PDF-specific cleaning.")
         
         raw_text = dehyphenate(raw_text)
-        print("    - Dehyphenation completed.")
-        
         raw_text = remove_linebreaks(raw_text)
-        print("    - Linebreaks removed.")
+
+        if verbose:
+            print("... Dehyphenation completed.")
+            print("... Linebreaks removed.")
     
     return raw_text
     
@@ -248,7 +252,7 @@ def chunk_summaries(
         chunked_summaries.append(chunk)
     return chunked_summaries
 
-def is_valid_json(json_string):
+def is_valid_json(json_string: str, verbose: bool = False) -> bool:
     """
     Check if json_string is valid JSON.
     """
@@ -256,7 +260,8 @@ def is_valid_json(json_string):
         json.loads(json_string)
         return True
     except json.JSONDecodeError as e:
-        print(f"... Invalid JSON: {e}")
+        if verbose:
+            print(f"... Invalid JSON: {e}")
         return False
 
 def fix_json(json_string: str) -> str:
@@ -272,35 +277,57 @@ def fix_json(json_string: str) -> str:
 
     return json_string
 
-def validate_and_fix_json(json_string: str) -> Optional[dict]:
+def validate_and_fix_json(
+        json_string: str, 
+        verbose: bool = False
+    ) -> Optional[dict]:
     """
     Check if a string is valid JSON. If not attempt to make it valid.
     """
-    if is_valid_json(json_string):
+    # Check if string is valid json string
+    if is_valid_json(json_string, verbose):
         return json.loads(json_string)
     
-    print("... Attempting to fix JSON.")
+    if verbose:
+        print("... Attempting to fix JSON.")
+
+    # Attempt to fix json
     fixed_json_str = fix_json(json_string)
     
     if is_valid_json(fixed_json_str):
-        print("... JSON fixed successfully.")
-        print(f'\n{json_string}\n')
+        if verbose:
+            print("... JSON fixed successfully.")
         return json.loads(fixed_json_str)
     else:
         print("... Failed to fix JSON.")
         print(f'\n{json_string}\n')
         return None
 
-def validate_summaries(llm_result):
+def validate_LLM_result(llm_result: str, verbose: bool = False):
     """
     Validate a collection of LLM summaries for correct JSON format.
     """
     try:
-        summaries = validate_and_fix_json(llm_result)
+        result = validate_and_fix_json(llm_result, verbose)
     except json.JSONDecodeError:
         print("... Error decoding JSON.\n")
         print(llm_result)
-    return summaries
+    return result
+
+def validate_toc(toc: dict) -> list:
+    """
+    Extract the 'properties' dictionary from a TOC dict, if present.
+
+    This function checks if the input dictionary `toc` contains a key named
+    'properties'. If the key exists, it returns the corresponding list. If 
+    the 'properties' key is not found, it returns the original `toc` list.
+    """
+    if 'properties' in toc:
+        return toc['properties']
+    elif 'items' in toc:
+        return toc['items']
+    else:
+        return [toc] if not isinstance(toc, list) else toc
 
 def print_entities(entities: list[dict]) -> None:
     [print(f"... ... {entity['text']} → {entity['ner_tag']}") for entity in entities]

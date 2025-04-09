@@ -10,7 +10,7 @@ from itertools import combinations, chain
 from typing import Optional
 from langdetect import detect, DetectorFactory
 
-from dygest import llms, utils, ner_utils, prompts
+from dygest import llms, utils, ner_utils, prompts, json_schemas
 from dygest.translations import LANGUAGES
 from dygest.output_utils import ExportFormats
 from dygest.ner_utils import NERlanguages
@@ -59,7 +59,7 @@ class DygestProcessor(DygestBaseParams):
             if self.verbose:
                 print(f"... Created output directory at {self.output_dir}") 
 
-    def run_language_detection(self, file: Path) -> str:
+    def run_language_detection(self) -> str:
         """
         Get language of text to set the correct NER model.
         
@@ -71,7 +71,9 @@ class DygestProcessor(DygestBaseParams):
         if language == 'auto':
             DetectorFactory.seed = 0
             language_ISO = detect(self.text[:500])
-            print(f"... Detected language '{language_ISO}' for {file.name}")
+
+            if self.verbose:
+                print(f"... Detected language '{language_ISO}'")
         else:
             language_ISO = language
         return language_ISO   
@@ -136,6 +138,10 @@ class DygestProcessor(DygestBaseParams):
             outside the range of the chunk’s sentence IDs, adjust it to 
             the sentence ID within the chunk.
             """
+            # Check for a structured json output ('topics' key is present)
+            if 'topics' in toc_part:
+                toc_part = toc_part['topics']
+
             # Extract numeric sentence IDs from the chunk
             chunk_start = chunk['s_ids'][0]   # e.g. 'S47'
             chunk_end   = chunk['s_ids'][-1]  # e.g. 'S48'
@@ -148,10 +154,10 @@ class DygestProcessor(DygestBaseParams):
             if len(all_toc_nums) == 0:
                 # Fallback if none are valid
                 toc_start_num = start_num
-                toc_end_num   = end_num
+                toc_end_num = end_num
             else:
                 toc_start_num = min(all_toc_nums)
-                toc_end_num   = max(all_toc_nums)
+                toc_end_num = max(all_toc_nums)
             
             aligned_toc_part = []
 
@@ -190,7 +196,7 @@ class DygestProcessor(DygestBaseParams):
 
                 topic['location'] = f"S{new_loc_num}"
                 aligned_toc_part.append(topic)
-            
+        
             return aligned_toc_part
            
         # TOC processing
@@ -207,12 +213,14 @@ class DygestProcessor(DygestBaseParams):
                     chunk=chunk_data['text']
                     ),
                 model=self.light_model,
+                output_format='json_schema',
+                json_schema=json_schemas.GET_TOPICS_JSON,
                 temperature=self.temperature,
                 sleep_time=self.sleep
                 )
             
             # Validate for correct JSON format
-            toc_part = utils.validate_summaries(result)
+            toc_part = utils.validate_LLM_result(result, self.verbose)
             
             # Re-align topic locations
             toc_part = align_toc_part(toc_part, chunk_data)
@@ -244,10 +252,15 @@ class DygestProcessor(DygestBaseParams):
                 language=self.language_string
                 ),
             model=self.expert_model,
+            output_format='json_schema',
+            json_schema=json_schemas.CREATE_TOC_JSON,
             temperature=self.temperature,
             sleep_time=self.sleep
             )
-        final_toc = utils.validate_summaries(toc)
+        
+        # Validate LLM response
+        toc = utils.validate_LLM_result(toc)
+        final_toc = utils.validate_toc(toc)
         
         return final_toc
 
@@ -267,12 +280,14 @@ class DygestProcessor(DygestBaseParams):
                     language=self.language_string
                     ),
                 model=self.light_model,
+                output_format='json_schema',
+                json_schema=json_schemas.CREATE_TOC_JSON,
                 temperature=self.temperature,
                 sleep_time=self.sleep
                 )
             
             # Validate
-            validated_result = utils.validate_summaries(result)
+            validated_result = utils.validate_LLM_result(result)
                         
             # Append
             summaries.append(validated_result['summary'])
@@ -296,7 +311,7 @@ class DygestProcessor(DygestBaseParams):
             temperature=self.temperature,
             sleep_time=self.sleep 
             )
-        
+
         # Create a unique set of keywords
         keywords_for_doc = self.clean_generated_keywords(keywords)
         
@@ -430,15 +445,18 @@ class DygestProcessor(DygestBaseParams):
         """
         # Reset processing values
         self.reset_processing_vals()
-        
+
         # Get filename and output filepath
         self.filename = file.stem
         self.output_filepath = self.output_dir.joinpath(self.filename)
 
+        print(f'[bold][orange]... Dygesting {file.name}')
+
         # Load file
         self.text = self.run_with_error_handling(
-            utils.load_file, 
-            file, 
+            utils.load_file,
+            file,
+            self.verbose,
             error_message="Error during file loading"
         )
         
@@ -453,7 +471,6 @@ class DygestProcessor(DygestBaseParams):
             )
 
         if self.verbose:
-            print(f"... Processing file: [bold]{file}")
             print(f"... Total tokens in file: {self.token_count}")
             print(f"... Number of chunks: {len(self.chunks)}")
             
@@ -461,7 +478,6 @@ class DygestProcessor(DygestBaseParams):
         if not self.language_ISO:
             self.language_ISO = self.run_with_error_handling(
                 self.run_language_detection,
-                file,
                 error_message="Error during language detection"
             )
             
@@ -488,6 +504,7 @@ class DygestProcessor(DygestBaseParams):
                 self.create_summaries_and_keywords, 
                 error_message="Error during creating summaries and keywords"
             )
+
         # Create only summary
         elif self.add_summaries:
             
@@ -495,6 +512,7 @@ class DygestProcessor(DygestBaseParams):
                 self.create_summaries, 
                 error_message="Error during summary creation"
             )
+
         # Create only keywords
         elif self.add_keywords:
             self.keywords = self.run_with_error_handling(

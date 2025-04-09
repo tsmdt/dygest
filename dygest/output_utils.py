@@ -313,6 +313,7 @@ class HTMLWriter(WriterBase):
 
             # Add TOC topics and links
             ol_tag = self.soup.find("ol")
+            
             for item in self.toc:
                 # Create a list element for the headline
                 li_tag = self.soup.new_tag("li")

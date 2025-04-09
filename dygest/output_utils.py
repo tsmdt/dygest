@@ -647,9 +647,6 @@ class HTMLWriter(WriterBase):
         transformed_soup = BeautifulSoup(content_html, 'html.parser')
         
         # Clean empty <p> tags
-        # for p in transformed_soup.find_all('p'):
-        #     if not p.get_text(strip=True) or p.get_text(strip=True) == '\n':
-        #         p.decompose()
         for p in transformed_soup.find_all('p'):
             # Check if the paragraph has neither text nor any child elements
             if not p.get_text(strip=True) and not p.find(True, recursive=False):

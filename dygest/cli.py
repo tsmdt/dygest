@@ -161,7 +161,7 @@ def main(
         HTML_Templates.TABS,
         "--html_template",
         "-ht",
-        help="Choose a HTML template for exporting.",
+        help="Choose a HTML template for exporting (tabs, plain, or all).",
     ),
     skip_html: bool = typer.Option(
         False,
@@ -242,8 +242,7 @@ config* and set your LLMs.")
         for format in formats_to_export:
             proc.export_format = format
             writer = output_utils.get_writer(proc)
-            write_method = getattr(writer, 'write', None)
-            write_method()
+            writer.write()
         
         print('[blue][bold]... DONE')
 

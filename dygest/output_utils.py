@@ -25,6 +25,7 @@ CATEGORY_COLORS = {
 class HTML_Templates(str, Enum):
     TABS = 'tabs'
     PLAIN = 'plain'
+    ALL = 'all'
 
 
 class ExportFormats(str, Enum):
@@ -60,8 +61,14 @@ class HTMLWriter(WriterBase):
     export_metadata: bool = field(default=None, init=True)
     html_template: HTML_Templates = field(default=HTML_Templates.TABS, init=True)
     has_speaker: bool = field(default=False, init=True)
+    write_all_templates: bool = field(default=False, init=True)
     
     def __post_init__(self):
+        if self.html_template == HTML_Templates.ALL:
+            # For ALL template type, we'll use TABS as the initial template
+            # The actual template switching will happen in write()
+            self.html_template = HTML_Templates.TABS
+            
         # Load an HTML template
         template = self.set_html_template(type=self.html_template)
 
@@ -108,6 +115,7 @@ class HTMLWriter(WriterBase):
         (e.g. no summary available) are represented as ``None`` and must be
         skipped by the caller.
         """
+        # TABS
         if self.html_template == HTML_Templates.TABS:
             return [
                 self.add_page_title,
@@ -117,6 +125,7 @@ class HTMLWriter(WriterBase):
                 self.add_metadata if self.export_metadata else None,
                 lambda: self.add_main_content(content_editable=True)
             ]
+        # PLAIN
         elif self.html_template == HTML_Templates.PLAIN:
             return [
                 self.add_page_title,
@@ -139,11 +148,51 @@ class HTMLWriter(WriterBase):
         
     def write(self):
         """
-        Build and save the HTML document.  
-        The order in which the individual content blocks are rendered is
-        determined by :py:meth:`_get_write_sequence`, which varies by
-        `self.html_template`.
+        Build and save the HTML document(s).  
+        If write_all_templates is True, writes both TABS and PLAIN templates.
+        Otherwise, writes only the specified template.
         """
+        if self.write_all_templates or self.html_template == HTML_Templates.ALL:
+            # Save current template and output path
+            original_template = self.html_template
+            original_output_path = self.output_filepath
+            
+            # Write TABS template
+            self.html_template = HTML_Templates.TABS
+            base_path = original_output_path.parent / original_output_path.stem
+            self.output_filepath = base_path.with_name(f"{base_path.name}_tabs.html")
+            self._write_single_template()
+            
+            # Write PLAIN template
+            self.html_template = HTML_Templates.PLAIN
+            self.output_filepath = base_path.with_name(f"{base_path.name}_plain.html")
+            self._write_single_template()
+            
+            # Restore original values
+            self.html_template = original_template
+            self.output_filepath = original_output_path
+        else:
+            self._write_single_template()
+
+    def _write_single_template(self):
+        """
+        Internal method to write a single HTML template.
+        """
+        # Reset the soup with the current template
+        template = self.set_html_template(type=self.html_template)
+        html = template.get('html')
+        
+        if 'css_path' in template:
+            css_content = template.get('css_path').read_text()
+            html = html.replace('{css_placeholder}', css_content)
+
+        if 'js_path' in template:
+            js_content = template.get('js_path').read_text()
+            html = html.replace('{js_placeholder}', js_content)
+            
+        self.soup = BeautifulSoup(html, 'html.parser')
+        
+        # Execute the write sequence
         for block in self._get_write_sequence():
             if block is not None:
                 block()
@@ -794,67 +843,93 @@ class JSONWriter(WriterBase):
         print(f"... 🌞 Saved JSON → {self.output_filepath}")
         
 
-def get_writer(proc):
+@dataclass
+class WriterFactory:
     """
-    Instantiates and returns the appropriate writer Class based on 
-    proc.export_format, including shared and format-specific parameters.
+    Factory class for creating appropriate writers based on export format.
     """
-    def html_specific_params(proc):
-        params = {
-            'export_metadata': proc.export_metadata if proc.export_metadata else False,
-            'html_template': proc.html_template if proc.html_template else HTML_Templates.TABS
+    proc: 'DygestProcessor' # Forward reference to avoid circular imports
+    
+    def create_writer(self) -> WriterBase:
+        """
+        Creates and returns the appropriate writer based on export format.
+        """
+        writer_class = self._get_writer_class()
+        writer_params = self._get_writer_params(writer_class)
+        return writer_class(**writer_params)
+    
+    def _get_writer_class(self) -> type[WriterBase]:
+        """
+        Returns the appropriate writer class based on export format.
+        """
+        writer_mapping = {
+            ExportFormats.HTML: HTMLWriter,
+            ExportFormats.CSV: CSVWriter,
+            ExportFormats.JSON: JSONWriter
         }
-        return params
-    
-    def csv_specific_params(proc):
-        return {}
-    
-    def json_specific_params(proc):
-        return {}
         
-    # Map ExportFormats to (WriterClass, specific_params_function)
-    writer_mapping = {
-        ExportFormats.HTML: (HTMLWriter, html_specific_params),
-        ExportFormats.CSV: (CSVWriter, csv_specific_params),
-        ExportFormats.JSON: (JSONWriter, json_specific_params)
-    }
+        writer_class = writer_mapping.get(self.proc.export_format)
+        if not writer_class:
+            raise ValueError(f"... Unknown export format: {self.proc.export_format}")
+            
+        return writer_class
+    
+    def _get_writer_params(self, writer_class: type[WriterBase]) -> dict:
+        """
+        Returns the parameters needed to instantiate the writer.
+        """
+        # Common parameters for all writers
+        shared_params = {
+            'filename': self.proc.filename,
+            'input_text': self.proc.text,
+            'chunk_size': self.proc.chunk_size,
+            'chunks': self.proc.chunks,
+            'named_entities': self.proc.entities if self.proc.add_ner else None,
+            'toc': self.proc.toc if self.proc.add_toc else None,
+            'summary': self.proc.summaries if self.proc.add_summaries else None,
+            'keywords': self.proc.keywords if self.proc.add_keywords else None,
+            'language': self.proc.language_ISO,
+            'light_model': self.proc.light_model,
+            'expert_model': self.proc.expert_model,
+            'token_count': self.proc.token_count,
+            'sentence_offsets': self.proc.sentence_offsets
+        }
+        
+        # Get format-specific parameters
+        format_params = self._get_format_specific_params(writer_class)
+        
+        # Handle output filepath
+        suffix = self.proc.export_format.value.lower()
+        if self.proc.export_format == ExportFormats.HTML and self.proc.html_template == HTML_Templates.ALL:
+            base_path = self.proc.output_filepath.parent / self.proc.output_filepath.stem
+            output_filepath = base_path.with_suffix(f'.{suffix}')
+        else:
+            output_filepath = self.proc.output_filepath.with_suffix(f'.{suffix}')
+            
+        shared_params['output_filepath'] = output_filepath
+        
+        # Merge all parameters
+        return {**shared_params, **format_params}
+    
+    def _get_format_specific_params(self, writer_class: type[WriterBase]) -> dict:
+        """
+        Returns format-specific parameters based on the writer class.
+        """
+        if writer_class == HTMLWriter:
+            return {
+                'export_metadata': self.proc.export_metadata if self.proc.export_metadata else False,
+                'html_template': self.proc.html_template if self.proc.html_template else HTML_Templates.TABS,
+                'write_all_templates': self.proc.html_template == HTML_Templates.ALL
+            }
+        return {}
 
-    # Retrieve writer_class and specific params function based on export_format
-    writer_entry = writer_mapping.get(proc.export_format)
-    if not writer_entry:
-        raise ValueError(f"... Unknown export format: {proc.export_format}")
 
-    writer_class, specific_params_func = writer_entry
-
-    # Shared params for all writer classes
-    shared_params = {
-        'filename': proc.filename,
-        'input_text': proc.text,
-        'chunk_size': proc.chunk_size,
-        'chunks': proc.chunks,
-        'named_entities': proc.entities if proc.add_ner else None,
-        'toc': proc.toc if proc.add_toc else None,
-        'summary': proc.summaries if proc.add_summaries else None,
-        'keywords': proc.keywords if proc.add_keywords else None,
-        'language': proc.language_ISO,
-        'light_model': proc.light_model,
-        'expert_model': proc.expert_model,
-        'token_count': proc.token_count,
-        'sentence_offsets': proc.sentence_offsets
-    }
-
-    # Get file suffix based on export_format
-    suffix = proc.export_format.value.lower()
-    output_filepath = proc.output_filepath.with_suffix(f'.{suffix}')
-    shared_params['output_filepath'] = output_filepath
-
-    # Get specific params and merge them
-    specific_params = specific_params_func(proc)
-    specific_params = {k: v for k, v in specific_params.items() if v is not None}
-    writer_params = {**shared_params, **specific_params}
-
-    # Return the writer
-    return writer_class(**writer_params)
+def get_writer(proc) -> WriterBase:
+    """
+    Creates and returns the appropriate writer for the given processor.
+    """
+    factory = WriterFactory(proc)
+    return factory.create_writer()
 
 def get_translation(key, language_code, default_language='en'):
     translations = UI_TRANSLATIONS.get(key, {})

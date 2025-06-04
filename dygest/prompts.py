@@ -10,17 +10,16 @@ def build_prompt(template, **kwargs):
 
 ### TOC CREATION ###
 
-GET_TOPICS =  """You will be given a text composed of multiple sentences. The sentences are numbered sequentially:
-- {first_sentence} = the first sentence of the text
-- {last_sentence} = the last sentence of the text
+GET_TOPICS =  """The input text is composed of sentences. The first sentence of this text is globally identified as {first_sentence} and the last sentence as {last_sentence}.
 
 Do not include these sentence numbers in your summary. Instead, reference the location **with the sentence number: "S<number>"**.
 
 Your tasks:
-1. Identify the top 2 most important topics discussed in the text.
+1. Identify the top 2 most important topics discussed in this text.
   - Each topic name should be a concise phrase (no more than 5 words).
+  - Focus on main topics and incorporate key named entities (of companies, research departments etc.).
 2. For each topic, generate a precise sub-headline (no more than 8 words) with key details.
-3. Count the sentences to give a **precise sentence number** as location for the identified topics.
+3. For each topic, identify its primary location within the text. This location **MUST be one of the global sentence identifiers** ranging from {first_sentence} to {last_sentence}. For example, if a topic is most relevant to sentence S48, use "S48" as the location. The format for the location is "S<number>", where <number> is the global sentence number.
 4. Return results as JSON **IN {language}**. Do NOT add anything else and use this template without any alterations:
   
 [
@@ -33,11 +32,10 @@ Your tasks:
 ]
 
 **Input Text:**
-{chunk}
-"""
+{chunk}"""
 
-CREATE_TOC = """
-Perform the following tasks on the provided list of summaries and **ALWAYS match their language**:
+
+CREATE_TOC = """Perform the following tasks on the provided list of summaries and **ALWAYS match their language**:
 
 1. **Create a Table of Contents (TOC):**
    - Group related summaries under concise, relevant headlines.
@@ -64,13 +62,11 @@ Perform the following tasks on the provided list of summaries and **ALWAYS match
 ]
 
 **Input Summaries:**
-{toc_parts}
-"""
+{toc_parts}"""
 
 ### SUMMARY CREATION ###
 
-CREATE_SUMMARY_AND_KEYWORDS = """
-Perform the following tasks on the provided text:
+CREATE_SUMMARY_AND_KEYWORDS = """Perform the following tasks on the provided text:
 
 1. Generate a summary **IN {language}**:
   - max. 3 sentences with the **most important topics** for the provided text.
@@ -96,11 +92,9 @@ Perform the following tasks on the provided text:
 }
 
 **Text Chunk:**
-{text_chunk}
-"""
+{text_chunk}"""
 
-CREATE_SUMMARY = """
-Perform the following tasks on the provided text chunk:
+CREATE_SUMMARY = """Perform the following tasks on the provided text chunk:
 
 1. Generate a **summary of max. 3 sentences** with the **most important topics** for the provided text chunk.
 2. Incorporate key details in your summary:
@@ -114,11 +108,9 @@ Perform the following tasks on the provided text chunk:
 **Return ONLY the summary and add nothing else!**
 
 **Text Chunk:**
-{text_chunk}
-"""
+{text_chunk}"""
 
-COMBINE_SUMMARIES = """
-Perform the following tasks on the provided list of summaries:
+COMBINE_SUMMARIES = """Perform the following tasks on the provided list of summaries:
 
 1. Generate a **single summary of maximum 5 sentences** that captures the **most important topics** from all provided summaries.
 2. **Remove similar summaries** to ensure the remaining summaries are **unique**.
@@ -127,13 +119,11 @@ Perform the following tasks on the provided list of summaries:
 Return **ONLY** the single summary.
 
 **Input Summaries:**
-{summaries}
-"""
+{summaries}"""
 
 ### KEYWORD CREATION ###
 
-CREATE_KEYWORDS = """
-Analyze the following text chunk and generate a set of broad, high-level keywords that capture the main topics and themes of the content.
+CREATE_KEYWORDS = """Analyze the following text chunk and generate a set of broad, high-level keywords that capture the main topics and themes of the content.
 
 **Requirements:**
 1. **Focus on overarching themes and main topics** rather than specific details.
@@ -145,5 +135,4 @@ Analyze the following text chunk and generate a set of broad, high-level keyword
 Return **ONLY the comma-separated keywords** and **nothing else**.
 
 **Text Chunk:**
-{text_chunk}
-"""
+{text_chunk}"""

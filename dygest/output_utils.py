@@ -1,6 +1,7 @@
 import re
 import csv
 import json
+
 from enum import Enum
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -21,12 +22,17 @@ CATEGORY_COLORS = {
 }
 
 
+class HTML_Templates(str, Enum):
+    TABS = 'tabs'
+    PLAIN = 'plain'
+
+
 class ExportFormats(str, Enum):
     ALL = 'all'
     JSON = 'json'
     CSV = 'csv'
     HTML = 'html'
-
+    
 
 @dataclass
 class WriterBase:
@@ -52,27 +58,97 @@ class HTMLWriter(WriterBase):
     Class for writing HTML output.
     """
     export_metadata: bool = field(default=None, init=True)
+    html_template: HTML_Templates = field(default=HTML_Templates.TABS, init=True)
     has_speaker: bool = field(default=False, init=True)
     
     def __post_init__(self):
-        # HTML template → templates.py
-        self.soup = BeautifulSoup(templates.HTML_CONTENT, "html.parser")
-        self.has_speaker = False
+        # Load an HTML template
+        template = self.set_html_template(type=self.html_template)
 
+        # Inject CSS and JavaScript
+        html = template.get('html')
+
+        if 'css_path' in template:
+            css_content = template.get('css_path').read_text()
+            html = html.replace('{css_placeholder}', css_content)
+
+        if 'js_path' in template:
+            js_content = template.get('js_path').read_text()
+            html = html.replace('{js_placeholder}', js_content)
+
+        # Soupify the template
+        self.soup = BeautifulSoup(html, 'html.parser')
+        self.has_speaker = False
+        
+    @staticmethod    
+    def set_html_template(type: HTML_Templates) -> dict:
+        """
+        Return HTML template dict with template, css and js filepaths.
+        """
+        html_templates = {
+            HTML_Templates.TABS: {
+                'html': templates.HTML_TABS,
+                'css_path': Path('dygest/static/css/tabs.css').resolve(),
+                'js_path': Path('dygest/static/tabs.js').resolve()
+            },
+            HTML_Templates.PLAIN: {
+                'html': templates.HTML_PLAIN,
+                'css_path': Path('dygest/static/css/plain.css').resolve()
+            }
+        }
+        return html_templates.get(type)
+
+    def _get_write_sequence(self):
+        """
+        Return an ordered list of callables that must be executed by
+        :py:meth:`write`.  
+        The concrete order depends on the selected HTML template to allow
+        different layouts (e.g. *tabs* vs. *plain*).  
+        Optional blocks that are not relevant for the current document
+        (e.g. no summary available) are represented as ``None`` and must be
+        skipped by the caller.
+        """
+        if self.html_template == HTML_Templates.TABS:
+            return [
+                self.add_page_title,
+                self.add_summary if self.summary else None,
+                self.add_toc if self.toc else None,
+                self.add_keywords if self.keywords else None,
+                self.add_metadata if self.export_metadata else None,
+                lambda: self.add_main_content(content_editable=True)
+            ]
+        elif self.html_template == HTML_Templates.PLAIN:
+            return [
+                self.add_page_title,
+                self.add_metadata if self.export_metadata else None,
+                self.add_summary if self.summary else None,
+                self.add_keywords if self.keywords else None,
+                self.add_toc if self.toc else None,
+                lambda: self.add_main_content(content_editable=False),
+            ]
+        else:
+            # Fallback to the historic default order
+            return [
+                self.add_page_title,
+                self.add_summary if self.summary else None,
+                self.add_toc if self.toc else None,
+                self.add_keywords if self.keywords else None,
+                self.add_metadata,
+                self.add_main_content
+            ]
+        
     def write(self):
         """
-        Builds and saves a HTML page with LLM summaries and Named Entities.
+        Build and save the HTML document.  
+        The order in which the individual content blocks are rendered is
+        determined by :py:meth:`_get_write_sequence`, which varies by
+        `self.html_template`.
         """
-        # Add metadata
-        self.add_metadata_to_html()
+        for block in self._get_write_sequence():
+            if block is not None:
+                block()
 
-        # Add main content
-        self.add_main_content()
-
-        # Add controls
-        self.add_controls()
-
-        # Save HTML to disk
+        # Save HTML
         self.save_html()
 
     def format_metadata_entry(self, parent, label, value):
@@ -82,68 +158,87 @@ class HTMLWriter(WriterBase):
         parent.append(span_tag)
         parent.append(br_tag)
 
-    def add_metadata_to_html(self):
+    def add_page_title(self):
         """
-        Adds metadata to HTML page.
+        Add page title to HTML.
         """
-        div_metadata = self.soup.find('div', class_='metadata')
-        if div_metadata:
-            # Add filename
-            h6_tag = div_metadata.find('h6', class_='metadata-header')
-            if h6_tag:
-                h6_tag.string = f'{self.filename}'
+        div_page_container = self.soup.find('div', class_='page-container')
+        if div_page_container:
+            # Add heading with filename as page title
+            h1_tag = self.soup.new_tag('h1')
+            h1_tag.string = self.filename
             
-            # Add and format metadata
-            if self.export_metadata:
-                div_metadata_content = self.soup.find('div', class_='metadata-content')
-                if div_metadata_content:
-                    # Light LLM
-                    self.format_metadata_entry(
-                        parent=div_metadata_content, 
-                        label="Light LLM (light_model)", 
-                        value=self.light_model
+            # Append h1 tag
+            div_page_container.append(h1_tag)
+            
+    def add_metadata(self):
+        """
+        Adds metadata to HTML.
+        """
+        div_page_container = self.soup.find('div', class_='page-container')
+        if div_page_container:
+            # Create metadata header
+            div_metadata = self.soup.new_tag(
+                'div',
+                attrs={'class': 'metadata'}
+            )
+            # Add timestamp
+            self.format_metadata_entry(
+                parent=div_metadata,
+                label='Created',
+                value=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            )
+            # Create metadata content
+            div_metadata_content = self.soup.new_tag(
+                'div',
+                attrs={'class': 'metadata-content'}
+            )
+            # Light LLM
+            self.format_metadata_entry(
+                parent=div_metadata_content, 
+                label="Light LLM", 
+                value=self.light_model
+            )
+            # Expert LLM
+            self.format_metadata_entry(
+                parent=div_metadata_content,
+                label="Expert LLM", 
+                value=self.expert_model
+            )
+            # Chunk size
+            self.format_metadata_entry(
+                parent=div_metadata_content, 
+                label="Chunk size", 
+                value=self.chunk_size
+            )
+            # Token count
+            token_count = f"{self.token_count:,.0f}".replace(',', '.')
+            self.format_metadata_entry(
+                parent=div_metadata_content, 
+                label="Tokens",
+                value=token_count
+            )
+            # NER
+            if self.named_entities:
+                ner_count = Counter([x['ner_tag'] for x in self.named_entities])
+                ner_counter_string = (
+                    ', '.join(f"{tag} ({count})" for tag, count in ner_count.items())
                     )
-                    # Expert LLM
-                    self.format_metadata_entry(
-                        parent=div_metadata_content,
-                        label="Expert LLM (expert_model)", 
-                        value=self.expert_model
-                    )
-                    # Chunk size
-                    self.format_metadata_entry(
-                        parent=div_metadata_content, 
-                        label="Chunk size", 
-                        value=self.chunk_size
-                    )
-                    # Datetime
-                    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    self.format_metadata_entry(
-                        parent=div_metadata_content,
-                        label="Date",
-                        value=current_time
-                    )
-                    # Token count
-                    token_count = f"{self.token_count:,.0f}".replace(',', '.')
-                    self.format_metadata_entry(
-                        parent=div_metadata_content, 
-                        label="Tokens",
-                        value=token_count
-                    )
-
-                    if self.named_entities:
-                        ner_count = Counter([x['ner_tag'] for x in self.named_entities])
-                        ner_string = f"{len(self.named_entities)} {list(ner_count.items())}"
-                        self.format_metadata_entry(
-                            parent=div_metadata_content,
-                            label="Entities",
-                            value=ner_string
-                        )
+                ner_string = f"{len(self.named_entities)} [{ner_counter_string}]"
+                self.format_metadata_entry(
+                    parent=div_metadata_content,
+                    label="Entities",
+                    value=ner_string
+                )
+                
+            # Append new elements
+            div_metadata.append(div_metadata_content)
+            div_page_container.append(div_metadata)
 
     def add_controls(self):
-        # Append additional button controls to HTML
-        div_additional_controls = self.soup.find('div', class_='additional-controls')
-        
-        if div_additional_controls:
+        # Add button for saving the edited HTML
+        div_document_controls = self.soup.find('div', class_='document-controls')
+        if div_document_controls:
             # Add NER Highlighting Button  
             if self.named_entities:
                 button_NER_highlighting = self.soup.new_tag(
@@ -156,7 +251,7 @@ class HTMLWriter(WriterBase):
                     key='button_NER_highlighting',
                     language_code=self.language
                 )
-                div_additional_controls.append(button_NER_highlighting)
+                div_document_controls.append(button_NER_highlighting)
 
             # Add Speaker / Timestamp Button 
             if self.has_speaker:
@@ -170,7 +265,7 @@ class HTMLWriter(WriterBase):
                     key='button_timestamps',
                     language_code=self.language
                 )
-                div_additional_controls.append(button_timestamps)
+                div_document_controls.append(button_timestamps)
 
             # Add button for showing HTML Code
             button_show_html = self.soup.new_tag(
@@ -183,133 +278,90 @@ class HTMLWriter(WriterBase):
                 key='button_show_HTML',
                 language_code=self.language
                 )
-            div_additional_controls.append(button_show_html)
-
-        # Add button for saving the edited HTML
-        div_document_controls = self.soup.find('div', class_='document-controls')
-        button_save = self.soup.new_tag(
-            'button',
-            attrs={
-                'class': 'save',
-                'onclick': 'savePage()'
-            })
-        button_save.string = get_translation(
-                key='button_save',
-                language_code=self.language
-            )
-        div_document_controls.append(button_save)
-
-    def add_main_content(self):
-        """
-        Appends main content blocks to a default HTML template.
-        """
-        # Add summary / TL;DR
-        if self.summary:
-            div_tldr = self.soup.find('div', class_='tldr')
-            if div_tldr:
-                # Create new div element
-                div_summary = self.soup.new_tag(
-                    'div',
-                    attrs={'class': 'tldr-content'}
-                )
-
-                # Add title tag
-                title_tag = self.soup.new_tag('span')
-                title_tag.string = get_translation(
-                    key="summary",
-                    language_code=self.language
-                )       
-
-                # Add summary
-                summary_tag = self.soup.new_tag('span')
-                summary_tag.string = self.summary.strip()
-
-                # Append new tags
-                div_summary.append(title_tag)
-                div_summary.append(summary_tag)
-                div_tldr.append(div_summary)
-        else:
-            div_tldr = self.soup.find('div', class_='tldr')
-            if div_tldr:
-                # Create new div element
-                div_summary = self.soup.new_tag(
-                    'div',
-                    attrs={'class': 'tldr-content'}
-                )
-
-                # Add title tag
-                title_tag = self.soup.new_tag('span')
-                title_tag.string = "No Summary!"
-                
-                # Append new tags
-                div_summary.append(title_tag)
-                div_tldr.append(div_summary)
-                
-        # Add keywords
-        if self.keywords:
-            div_tldr = self.soup.find('div', class_='tldr')
-            if div_tldr:
-                # Create new div element
-                div_keywords = self.soup.new_tag(
-                    'div',
-                    attrs={'class': 'tldr-keywords'}
-                )
-
-                # Add title tag
-                title_tag = self.soup.new_tag('span')
-                title_tag.string = get_translation(
-                    key="keywords",
-                    language_code=self.language
-                )       
-
-                # Add keywords string
-                keywords_tag = self.soup.new_tag('span')
-                keywords_tag.string = (
-                    ', '.join(
-                        [key if key.isupper() else key.title() for key in self.keywords]
-                        )
-                    )
-
-                # Append new tags
-                div_keywords.append(title_tag)
-                div_keywords.append(keywords_tag)
-                div_tldr.append(div_keywords)
-        
-        # Add TOC heading
-        if self.toc:
-            div_additional_controls = self.soup.find(
-                'div', 
-                class_='additional-controls'
-                )
-            div_summaries = self.soup.new_tag(
-                'div', 
-                attrs={'class': 'summaries'}
-                )
+            div_document_controls.append(button_show_html)
             
-            div_summaries_content = self.soup.new_tag(
+            # Save button
+            button_save = self.soup.new_tag(
+                'button',
+                attrs={
+                    'class': 'save',
+                    'onclick': 'savePage()'
+                })
+            button_save.string = get_translation(
+                    key='button_save',
+                    language_code=self.language
+                )
+            div_document_controls.append(button_save)
+              
+    def add_summary(self):
+        """
+        Appends summary content div to a HTML template.
+        """
+        div_page_container = self.soup.find('div', class_='page-container')
+        if div_page_container:
+            # Create summary div
+            div_summary = self.soup.new_tag(
+                'div',
+                attrs={'class': 'summary'}
+            )    
+            # Add summary
+            summary_tag = self.soup.new_tag('span')
+            summary_tag.string = self.summary.strip()
+            
+            # Append new elements
+            div_summary.append(summary_tag)
+            div_page_container.append(div_summary)
+            
+    def add_keywords(self):
+        """
+        Appends keywords content div to a HTML template.
+        """
+        div_page_container = self.soup.find('div', class_='page-container')
+        if div_page_container:
+            # Create keywords div
+            div_keywords = self.soup.new_tag(
+                'div',
+                attrs={'class': 'keywords'}
+            )
+            # Add keywords string
+            keywords_tag = self.soup.new_tag('span')
+            keywords_tag.string = (
+                ', '.join(
+                    [key if key.isupper() else key.lower() for key in self.keywords]
+                    )
+                )
+            # Append new elements
+            div_keywords.append(keywords_tag)
+            div_page_container.append(div_keywords)
+            
+    def add_toc(self):
+        """
+        Appends table of contents div to a HTML template.
+        """
+        div_page_container = self.soup.find('div', class_='page-container')
+        if div_page_container:
+            # Create toc div
+            div_toc_wrapper = self.soup.new_tag(
+                'div',
+                attrs={'class': 'toc-wrapper'}
+            )
+            div_toc = self.soup.new_tag(
+                'div', 
+                attrs={'class': 'toc'}
+                )
+            div_toc_content = self.soup.new_tag(
                 'div',
                 attrs={
-                    'id': 'summary-content',
+                    'id': 'toc-content',
                     'style': 'display: block; text-align: left'
                 }
             )
             
-            h5_tag = self.soup.new_tag(
-                'h5',
-                attrs={
-                    'style': 'text-align: center;'
-                }
-            )
-            h5_tag.string = get_translation(
-                key='heading_topics',
-                language_code=self.language
-            )
-            div_summaries_content.append(h5_tag)
-            
             ol_tag = self.soup.new_tag('ol')
-            div_summaries_content.append(ol_tag)
-            div_summaries.append(div_summaries_content)
-            div_additional_controls.insert_after(div_summaries)
+            div_toc_content.append(ol_tag)
+            div_toc.append(div_toc_content)
+            div_toc_wrapper.append(div_toc)
+            div_page_container.append(div_toc_wrapper)
 
             # Add TOC topics and links
             ol_tag = self.soup.find("ol")
@@ -341,10 +393,12 @@ class HTMLWriter(WriterBase):
                 
                 li_tag.append(ul_tag)
                 ol_tag.append(li_tag)
-
-
-        ## Main Content
         
+
+    def add_main_content(self, content_editable: bool = False):
+        """
+        Append main content blocks and event to HTML.
+        """
         events = []
         
         ### 1. Collect NER events
@@ -437,7 +491,7 @@ class HTMLWriter(WriterBase):
                         "data-color": CATEGORY_COLORS.get(data, ''),
                         "style": f"background-color: {CATEGORY_COLORS.get(data, '')};",
                         "title": data,
-                        "contenteditable": False
+                        "contenteditable": f'{str(content_editable).lower()}'
                     })
 
                 # Create the inner span that will hold the text
@@ -446,7 +500,7 @@ class HTMLWriter(WriterBase):
                     attrs={
                         "class": "edits",
                         "tabindex": 0,
-                        "contenteditable": True
+                        "contenteditable": f'{str(content_editable).lower()}'
                     })
 
                 outer_span_tag.append(inner_span_tag)
@@ -500,7 +554,7 @@ class HTMLWriter(WriterBase):
                     "span", 
                     attrs={
                         "class": "timestamp",
-                        "contenteditable": False
+                        "contenteditable": f'{str(content_editable).lower()}'
                     })
                 
                 inner_span_tag = self.soup.new_tag(
@@ -508,7 +562,7 @@ class HTMLWriter(WriterBase):
                     attrs={
                         "class": "edits",
                         "tabindex": 0,
-                        "contenteditable": True
+                        "contenteditable": f'{str(content_editable).lower()}'
                     })
                 
                 outer_span_tag.append(inner_span_tag)
@@ -529,11 +583,22 @@ class HTMLWriter(WriterBase):
         if p_tag.contents:
             content_elements.append(p_tag)
         
-        # Write the new content
-        content_div = self.soup.find('div', class_='content')
-        for element in content_elements:
-            content_div.append(element)
-
+        # Write the main page content
+        div_page_container = self.soup.find('div', class_='page-container')
+        if div_page_container:            
+            div_content = self.soup.new_tag(
+                'div',
+                attrs={
+                    'class': 'content',
+                    'contenteditable': f'{str(content_editable).lower()}'
+                }
+            )
+            
+            for element in content_elements:
+                div_content.append(element)
+            
+            div_page_container.append(div_content)    
+            
         # Transform any markdown tags to HTML
         self.transform_markdown_tags()
         
@@ -735,7 +800,11 @@ def get_writer(proc):
     proc.export_format, including shared and format-specific parameters.
     """
     def html_specific_params(proc):
-        return {'export_metadata': proc.export_metadata} if proc.export_metadata else {}
+        params = {
+            'export_metadata': proc.export_metadata if proc.export_metadata else False,
+            'html_template': proc.html_template if proc.html_template else HTML_Templates.TABS
+        }
+        return params
     
     def csv_specific_params(proc):
         return {}

@@ -2,7 +2,6 @@ import json
 import re
 import json_repair
 import typer
-
 from rich import print
 from typing import Optional
 from pathlib import Path
@@ -18,7 +17,6 @@ VALID_FILE_FORMATS = [
     '.html',
     '.xml'
 ]
-
 
 def resolve_input_dir(filepath: str = None, output_dir: str = None) -> Path:
     """
@@ -40,7 +38,7 @@ def resolve_input_dir(filepath: str = None, output_dir: str = None) -> Path:
         
     return resolved_output_dir
 
-def load_filepath(filepath: str) -> list[Path]:
+def load_filepath(filepath: str, skip_html: bool = False) -> list[Path]:
     """
     Loads a filepath (file or folder).
     """
@@ -51,14 +49,37 @@ def load_filepath(filepath: str) -> list[Path]:
     elif filepath.is_dir():
         files_to_process = []        
         for fpath in list(filepath.rglob('*.*')):
-            if Path(fpath).is_file() and Path(fpath).suffix in VALID_FILE_FORMATS:
-                normalized_fpath = normalize_filepath(fpath)
-                files_to_process.append(normalized_fpath)
+            suffix = fpath.suffix.lower()
+            if fpath.is_file() and fpath.suffix.lower() in VALID_FILE_FORMATS:
+                suffix = fpath.suffix.lower()
+
+                # Skip .html inputs if skip_html
+                if suffix == '.html' and skip_html:
+                    print(
+                        f"... Skipping [bold]{fpath}[/bold] because skip_html "
+                        f"is enabled."
+                    )
+                    continue
+
+                # Skip non-HTML inputs if skip_html and HTML already exists
+                if suffix != '.html' and skip_html:
+                    html_candidate = fpath.parent / f"{fpath.stem}.html"
+                    if html_candidate.exists():
+                        print(
+                            f"... Skipping [bold]{fpath}[/bold] because "
+                            f"'{html_candidate.name}' already exists."
+                        )
+                        continue
+
+                normalized = normalize_filepath(fpath)
+                files_to_process.append(normalized)
             else:
-                print(f"... Skipping [bold]{fpath}[/bold] as the file format is not supported.")
+                print(
+                    f"... Skipping [bold]{fpath}[/bold]: unsupported file format."
+                )
                 
         if not files_to_process:
-            print("... No files with valid file formats found in the directory.")
+            print("... No files with valid file formats found in the folder.")
             raise typer.Exit(code=1)
     else:
         files_to_process = [filepath]
@@ -68,7 +89,8 @@ def load_filepath(filepath: str) -> list[Path]:
 def normalize_filepath(filepath: Path) -> Path:
     """
     Normalizes the filepath by replacing non-word characters with underscores,
-    collapsing multiple underscores into one, and removing leading/trailing underscores.
+    collapsing multiple underscores into one, and removing leading/trailing 
+    underscores.
     """
     new_filename = re.sub(r'\W+', '_', filepath.stem)
     new_filename = new_filename.strip('_')
@@ -94,7 +116,10 @@ def remove_linebreaks(text: str) -> str:
     """
     Remove linebreaks that cut sentences.
     """
-    return re.sub(r"([A-Za-z0-9\.,:;!“”'\?])\n([A-Za-z0-9\.,:;!“”'\?])", r'\1 \2', text)
+    return re.sub(
+        r"([A-Za-z0-9\.,:;!“”'\?])\n([A-Za-z0-9\.,:;!“”'\?])", r'\1 \2', 
+        text
+        )
 
 def load_file(fpath: str, verbose: bool = False) -> str:
     """
@@ -103,7 +128,7 @@ def load_file(fpath: str, verbose: bool = False) -> str:
     Parameters:
     - fpath: Path to the input file.
 
-    TODO: Better handling of PDF layout issues (redundant headers, footers etc.)
+    TODO: Better handling of PDF layout issues (redundant headers, footers...)
     """
     from markitdown import MarkItDown
     
@@ -334,8 +359,10 @@ def print_entities(entities: list[dict]) -> None:
 
 def print_toc_topics(toc_part: list[dict]) -> None:
     for idx, item in enumerate(toc_part):
-        print(f"... [{idx + 1}] {item['topic']}: {item['summary']} (LOCATION: {item['location']})")
+        print(
+            f"... [{idx + 1}] {item['topic']}: "
+            f"{item['summary']} (LOCATION: {item['location']})"
+        )
 
 def print_summaries(summary: str) -> None:
     print(f"... {summary}")
-    

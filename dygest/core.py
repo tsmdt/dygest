@@ -12,7 +12,7 @@ from langdetect import detect, DetectorFactory
 
 from dygest import llms, utils, ner_utils, prompts, json_schemas
 from dygest.translations import LANGUAGES
-from dygest.output_utils import ExportFormats
+from dygest.output_utils import ExportFormats, HTML_Templates
 from dygest.ner_utils import NERlanguages
 
 
@@ -36,6 +36,7 @@ class DygestBaseParams:
     verbose: bool = False
     export_metadata: bool = False
     export_format: ExportFormats = ExportFormats.HTML
+    html_template: HTML_Templates = HTML_Templates.TABS
 
 
 @dataclass
@@ -133,70 +134,71 @@ class DygestProcessor(DygestBaseParams):
 
         def align_toc_part(toc_part: list[dict], chunk: dict) -> list[dict]:
             """
-            Align the topic locations (e.g. "S7") to match them with the 
-            correct chunk sentence IDs. If the location from the TOC is 
-            outside the range of the chunk’s sentence IDs, adjust it to 
-            the sentence ID within the chunk.
+            Align the topic locations (e.g. "S7") to match them with the
+            correct chunk sentence IDs. The goal is to ensure the 'location'
+            is one of the actual global sentence IDs present in the chunk.
             """
             # Check for a structured json output ('topics' key is present)
             if 'topics' in toc_part:
                 toc_part = toc_part['topics']
 
-            # Extract numeric sentence IDs from the chunk
-            chunk_start = chunk['s_ids'][0]   # e.g. 'S47'
-            chunk_end   = chunk['s_ids'][-1]  # e.g. 'S48'
-            start_num   = int(chunk_start[1:])  
-            end_num     = int(chunk_end[1:])      
+            chunk_s_ids_global = chunk['s_ids']  # List of strings like ['S47', 'S48', 'S49']
+            if not chunk_s_ids_global:
+                if self.verbose:
+                    print("... Warning: Empty chunk_s_ids_global in align_toc_part.")
+                return []
 
-            # Validate locations in toc_part
-            all_toc_nums = [int(topic['location'][1:]) for topic in toc_part
-                            if is_valid_location(topic['location'])]
-            if len(all_toc_nums) == 0:
-                # Fallback if none are valid
-                toc_start_num = start_num
-                toc_end_num = end_num
-            else:
-                toc_start_num = min(all_toc_nums)
-                toc_end_num = max(all_toc_nums)
-            
+            # Convert global sentence IDs of the chunk to numbers for comparison
+            try:
+                chunk_s_nums_global = [int(sid[1:]) for sid in chunk_s_ids_global]
+            except ValueError as e:
+                if self.verbose:
+                    print(f"... Warning: Could not parse sentence numbers from chunk_s_ids_global: {chunk_s_ids_global}. Error: {e}")
+                return toc_part # Return original if parsing fails, or handle error appropriately
+
+            default_location = chunk_s_ids_global[0]
+
             aligned_toc_part = []
-
             for topic in toc_part:
-                # Validate location
-                if not is_valid_location(topic['location']):
-                    location = fix_wrong_location(topic['location'])
-                    if location is None:
-                        location = chunk_start
-                    topic['location'] = location
-                else: 
-                    location = topic['location']  # e.g. 'S2'
-                            
-                loc_num = int(location[1:])
-                
-                # If it's already within [start_num, end_num], leave it alone:
-                if start_num <= loc_num <= end_num:
-                    new_loc_num = loc_num
-                else:
-                    # If toc_part effectively has only one point (avoid dividing by zero)
-                    if toc_start_num == toc_end_num:
-                        # Just clamp to the chunk start or end
-                        if loc_num < start_num:
-                            new_loc_num = start_num
-                        else:
-                            new_loc_num = end_num
-                    else:
-                        # Calculate proportion in [toc_start_num, toc_end_num]
-                        proportion = (loc_num - toc_start_num) / (toc_end_num - toc_start_num)
-                        # Map proportion to [start_num, end_num]
-                        mapped_loc_num = start_num + proportion * (end_num - start_num)
-                        # Round and clamp
-                        mapped_loc_num = round(mapped_loc_num)
-                        mapped_loc_num = max(start_num, min(mapped_loc_num, end_num))
-                        new_loc_num = mapped_loc_num
+                original_llm_location = topic.get('location')
+                current_location_str = None
 
-                topic['location'] = f"S{new_loc_num}"
+                # Validate and fix the LLM's proposed location
+                if original_llm_location and is_valid_location(original_llm_location):
+                    current_location_str = original_llm_location
+                elif original_llm_location:
+                    fixed_loc = fix_wrong_location(original_llm_location)
+                    if fixed_loc and is_valid_location(fixed_loc):
+                        current_location_str = fixed_loc
+
+                final_location_str = default_location # Default to the start of the chunk
+
+                if current_location_str:
+                    # Case 1: LLM's location is a valid global ID within this chunk's sentences
+                    if current_location_str in chunk_s_ids_global:
+                        final_location_str = current_location_str
+                    else:
+                        # Case 2: LLM's location is not directly in this chunk's s_ids.
+                        # Attempt to find the numerically closest valid s_id from this chunk.
+                        try:
+                            llm_loc_num = int(current_location_str[1:])
+                            if chunk_s_nums_global: # Ensure list is not empty
+                                closest_s_num = min(chunk_s_nums_global, key=lambda x: abs(x - llm_loc_num))
+                                final_location_str = f"S{closest_s_num}"
+                            # If chunk_s_nums_global is empty, final_location_str remains default_location
+                        except ValueError:
+                            # Could not parse number from LLM's location string, stick to default_location
+                            if self.verbose:
+                                print(f"... Warning: Could not parse number from LLM location '{current_location_str}'. Using default '{default_location}'.")
+                else:
+                    # No valid or fixable location string from LLM, stick to default_location
+                    if self.verbose and original_llm_location:
+                         print(f"... Warning: LLM location '{original_llm_location}' was invalid and unfixable. Using default '{default_location}'.")
+
+
+                topic['location'] = final_location_str
                 aligned_toc_part.append(topic)
-        
+
             return aligned_toc_part
            
         # TOC processing

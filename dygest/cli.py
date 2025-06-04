@@ -2,7 +2,7 @@ import typer
 from typing import Optional
 from pathlib import Path
 from rich import print
-from dygest.output_utils import ExportFormats
+from dygest.output_utils import ExportFormats, HTML_Templates
 from dygest.config import CONFIG, DEFAULT_CONFIG
 
 app = typer.Typer(
@@ -157,17 +157,29 @@ def main(
         "-sim",
         help="Similarity threshold for removing duplicate topics."
     ),
-    verbose: bool = typer.Option(
+    html_template: HTML_Templates = typer.Option(
+        HTML_Templates.TABS,
+        "--html_template",
+        "-ht",
+        help="Choose a HTML template for exporting.",
+    ),
+    skip_html: bool = typer.Option(
         False,
-        "--verbose",
-        "-v",
-        help="Enable verbose output. Defaults to False.",
+        "--skip_html",
+        "-skip",
+        help="Skip files if HTML already exists in the same folder. Defaults to False.",
     ),
     export_metadata: bool = typer.Option(
         False,
         "--export_metadata",
         "-meta",
         help="Enable exporting metadata to output file(s). Defaults to False.",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose output. Defaults to False.",
     )
 ):
     """
@@ -190,9 +202,9 @@ config* and set your LLMs.")
         return
     
     # Create a list of all files to process
-    files_to_process = utils.load_filepath(filepath)
+    files_to_process = utils.load_filepath(filepath, skip_html=skip_html)
         
-    # for file in proc.files_to_process:
+    # Process files
     for file in files_to_process:
         proc = core.DygestProcessor(
             filepath=filepath,
@@ -212,31 +224,33 @@ config* and set your LLMs.")
             precise=CONFIG['precise'],
             verbose=verbose,
             export_metadata=export_metadata,
-            export_format=export_format
+            export_format=export_format,
+            html_template=html_template
         )
         
         # Process file
         proc.process_file(file)
 
         # Write output
-        try:
-            formats_to_export = (
-                [ExportFormats.CSV, ExportFormats.JSON, ExportFormats.HTML]
-                if proc.export_format == ExportFormats.ALL
-                else [proc.export_format]
-            )
-            
-            for format in formats_to_export:
-                proc.export_format = format
-                writer = output_utils.get_writer(proc)
-                write_method = getattr(writer, 'write', None)
-                write_method()
-                print('[blue][bold]... DONE')
+        # try:
+        formats_to_export = (
+            [ExportFormats.CSV, ExportFormats.JSON, ExportFormats.HTML]
+            if proc.export_format == ExportFormats.ALL
+            else [proc.export_format, ExportFormats.JSON]
+        )
+        
+        for format in formats_to_export:
+            proc.export_format = format
+            writer = output_utils.get_writer(proc)
+            write_method = getattr(writer, 'write', None)
+            write_method()
+        
+        print('[blue][bold]... DONE')
 
-        except ValueError as ve:
-            print(f'... {ve}')
-        except Exception as e:
-            print(f'... An unexpected error occurred: {e}')
+        # except ValueError as ve:
+        #     print(f'... {ve}')
+        # except Exception as e:
+        #     print(f'... An unexpected error occurred: {e}')
 
 if __name__ == '__main__':
     app()

@@ -163,7 +163,7 @@ def main(
         'templates/plain',
         "--html_template",
         "-ht",
-        help="Specify a folder with an HTML template and CSS (and optional JavaScript).",
+        help="Specify a folder with an HTML template, CSS and (optional) JavaScript.",
         file_okay=False,
         dir_okay=True,
         resolve_path=True
@@ -209,7 +209,6 @@ config* and set your LLMs.")
                 fg=typer.colors.RED
             )
             raise typer.Exit(code=1)
-        # Check for required HTML file
         html_file = next(html_template.glob('*.html'), None)
         if not html_file:
             typer.secho(

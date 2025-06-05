@@ -1,7 +1,9 @@
 import typer
+import json
 from typing import Optional
 from pathlib import Path
 from rich import print
+
 from dygest.output_utils import ExportFormats
 from dygest.config import CONFIG, DEFAULT_CONFIG
 
@@ -119,7 +121,7 @@ def main(
         None,
         "--files",
         "-f",
-        help="Path to the input folder or .txt file."
+        help="Path to the input folder or file."
     ),
     output_dir: Optional[str] = typer.Option(
         None,
@@ -189,7 +191,7 @@ def main(
     Create insights for your documents (summaries, keywords, TOCs).
     """
     from dygest.config import load_config
-    from dygest import core, output_utils, utils
+    from dygest import core, output_utils, utils, translations
     global CONFIG
     
     # Load config and make sure it is correctly set
@@ -221,38 +223,103 @@ config* and set your LLMs.")
         
     # Process files
     for file in files_to_process:
-        proc = core.DygestProcessor(
-            filepath=filepath,
-            output_dir=utils.resolve_input_dir(Path(filepath), output_dir),
-            light_model=CONFIG['light_model'],
-            expert_model=CONFIG['expert_model'],
-            embedding_model=CONFIG['embedding_model'],
-            temperature=CONFIG['temperature'],
-            sleep=CONFIG['sleep'],
-            chunk_size=CONFIG['chunk_size'],
-            add_toc=toc,
-            add_summaries=summarize,
-            add_keywords=keywords,
-            add_ner=CONFIG['ner'],
-            sim_threshold=sim_threshold,
-            provided_language=CONFIG['language'],
-            precise=CONFIG['precise'],
-            verbose=verbose,
-            export_metadata=export_metadata,
-            export_format=export_format,
-            html_template_path=html_template
-        )
-        
-        # Process file
-        proc.process_file(file)
+        # Handle dygest JSON input files (and do not run LLM processing)
+        if file.suffix.lower() == '.json':
+            try:
+                with open(file, 'r', encoding='utf-8') as f:
+                    json_data = json.load(f)
+                    
+                # Validate JSON structure
+                if not utils.validate_json_input(json_data):
+                    raise ValueError("Invalid JSON structure")
+                    
+                # Create processor with minimal required attributes
+                proc = core.DygestProcessor(
+                    filepath=filepath,
+                    output_dir=utils.resolve_input_dir(Path(filepath), output_dir),
+                    light_model=json_data['light_model'],
+                    expert_model=json_data['expert_model'],
+                    embedding_model=CONFIG['embedding_model'],
+                    temperature=CONFIG['temperature'],
+                    sleep=CONFIG['sleep'],
+                    chunk_size=json_data['chunk_size'],
+                    add_toc='toc' in json_data,
+                    add_summaries='summary' in json_data,
+                    add_keywords='keywords' in json_data,
+                    add_ner=CONFIG['ner'],
+                    sim_threshold=sim_threshold,
+                    provided_language=json_data['language'],
+                    precise=CONFIG['precise'],
+                    verbose=verbose,
+                    export_metadata=export_metadata,
+                    export_format=export_format,
+                    html_template_path=html_template
+                )
+                
+                # Set the data from JSON
+                proc.filename = json_data['filename']
+                proc.output_filepath = Path(json_data['output_filepath'])
+                proc.text = '\n'.join(chunk['text'] for chunk in json_data['chunks'].values())
+                proc.chunks = json_data['chunks']
+                proc.token_count = json_data['token_count']
+                proc.language_ISO = json_data['language']
+                proc.language_string = translations.LANGUAGES.get(json_data['language']).title()
+                proc.sentence_offsets = json_data['sentence_offsets']
+                
+                if 'summary' in json_data:
+                    proc.summaries = json_data['summary']
+                if 'keywords' in json_data:
+                    proc.keywords = json_data['keywords']
+                if 'toc' in json_data:
+                    proc.toc = json_data['toc']
+                
+            except json.JSONDecodeError as e:
+                print(f"[purple]... Error: Invalid JSON file: {e}")
+                continue
+            except Exception as e:
+                print(f"[purple]... Error processing JSON file: {e}")
+                continue
+        else:
+            # Regular file processing
+            proc = core.DygestProcessor(
+                filepath=filepath,
+                output_dir=utils.resolve_input_dir(Path(filepath), output_dir),
+                light_model=CONFIG['light_model'],
+                expert_model=CONFIG['expert_model'],
+                embedding_model=CONFIG['embedding_model'],
+                temperature=CONFIG['temperature'],
+                sleep=CONFIG['sleep'],
+                chunk_size=CONFIG['chunk_size'],
+                add_toc=toc,
+                add_summaries=summarize,
+                add_keywords=keywords,
+                add_ner=CONFIG['ner'],
+                sim_threshold=sim_threshold,
+                provided_language=CONFIG['language'],
+                precise=CONFIG['precise'],
+                verbose=verbose,
+                export_metadata=export_metadata,
+                export_format=export_format,
+                html_template_path=html_template
+            )
+            
+            # Process file
+            proc.process_file(file)
 
         # Write output
         try:
-            formats_to_export = (
-                [ExportFormats.CSV, ExportFormats.JSON, ExportFormats.HTML]
-                if proc.export_format == ExportFormats.ALL
-                else [proc.export_format, ExportFormats.JSON]
-            )
+            if file.suffix.lower() != '.json':
+                formats_to_export = (
+                    [ExportFormats.CSV, ExportFormats.JSON, ExportFormats.HTML]
+                    if proc.export_format == ExportFormats.ALL
+                    else [proc.export_format, ExportFormats.JSON]
+                )
+            else:
+                formats_to_export = (
+                    [ExportFormats.CSV, ExportFormats.HTML]
+                    if proc.export_format == ExportFormats.ALL
+                    else [proc.export_format]
+                )
             
             for format in formats_to_export:
                 proc.export_format = format

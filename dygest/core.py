@@ -36,7 +36,6 @@ class DygestBaseParams:
     verbose: bool = False
     export_metadata: bool = False
     export_format: ExportFormats = ExportFormats.HTML
-    # html_template: HTML_Templates = HTML_Templates.TABS
     html_template_path: Path = None
 
 

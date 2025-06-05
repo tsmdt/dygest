@@ -366,3 +366,42 @@ def print_toc_topics(toc_part: list[dict]) -> None:
 
 def print_summaries(summary: str) -> None:
     print(f"... {summary}")
+
+def validate_json_input(json_data: dict) -> bool:
+    """
+    Validate if the JSON input contains all required keys and has the correct structure.
+    
+    Args:
+        json_data (dict): The JSON data to validate
+        
+    Returns:
+        bool: True if valid, False otherwise
+    """
+    required_keys = {
+        'filename', 'output_filepath', 'language', 'chunk_size', 
+        'token_count', 'light_model', 'expert_model', 'chunks'
+    }
+    
+    # Check if all required keys are present
+    if not all(key in json_data for key in required_keys):
+        missing_keys = required_keys - set(json_data.keys())
+        print(f"... Error: Missing required keys in JSON: {missing_keys}")
+        return False
+        
+    # Validate chunks structure
+    if not isinstance(json_data['chunks'], dict):
+        print("... Error: 'chunks' must be a dictionary")
+        return False
+        
+    for chunk_key, chunk_data in json_data['chunks'].items():
+        if not isinstance(chunk_data, dict):
+            print(f"... Error: Chunk '{chunk_key}' must be a dictionary")
+            return False
+        if 'text' not in chunk_data or 's_ids' not in chunk_data:
+            print(f"... Error: Chunk '{chunk_key}' missing required 'text' or 's_ids'")
+            return False
+        if not isinstance(chunk_data['s_ids'], list):
+            print(f"... Error: 's_ids' in chunk '{chunk_key}' must be a list")
+            return False
+            
+    return True

@@ -708,6 +708,7 @@ class JSONWriter(WriterBase):
                 'light_model': self.light_model,
                 'expert_model': self.expert_model,
                 'chunks': self.chunks,
+                'sentence_offsets': self.sentence_offsets,
                 'summary': self.summary if self.summary else None,
                 'keywords': self.keywords if self.keywords else None,
                 'toc': self.toc if self.toc else None

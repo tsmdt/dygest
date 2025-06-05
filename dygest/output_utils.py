@@ -283,64 +283,6 @@ class HTMLWriter(WriterBase):
             # Append new elements
             div_metadata.append(div_metadata_content)
             div_page_container.append(div_metadata)
-
-    def add_controls(self):
-        # Add button for saving the edited HTML
-        div_document_controls = self.soup.find('div', class_='document-controls')
-        if div_document_controls:
-            # Add NER Highlighting Button  
-            if self.named_entities:
-                button_NER_highlighting = self.soup.new_tag(
-                    'button',
-                    attrs={
-                        "id": "toggle-highlighting",
-                        "onclick": "toggleHighlighting()"
-                    })
-                button_NER_highlighting.string = get_translation(
-                    key='button_NER_highlighting',
-                    language_code=self.language
-                )
-                div_document_controls.append(button_NER_highlighting)
-
-            # Add Speaker / Timestamp Button 
-            if self.has_speaker:
-                button_timestamps = self.soup.new_tag(
-                    'button',
-                    attrs={
-                        "id": "toggle-timestamp",
-                        "onclick": "toggleTimestamp()"
-                    })
-                button_timestamps.string = get_translation(
-                    key='button_timestamps',
-                    language_code=self.language
-                )
-                div_document_controls.append(button_timestamps)
-
-            # Add button for showing HTML Code
-            button_show_html = self.soup.new_tag(
-                'button',
-                attrs={
-                    'id': 'toggle-source',
-                    'onclick': 'toggleSource()'
-                })
-            button_show_html.string = get_translation(
-                key='button_show_HTML',
-                language_code=self.language
-                )
-            div_document_controls.append(button_show_html)
-            
-            # Save button
-            button_save = self.soup.new_tag(
-                'button',
-                attrs={
-                    'class': 'save',
-                    'onclick': 'savePage()'
-                })
-            button_save.string = get_translation(
-                    key='button_save',
-                    language_code=self.language
-                )
-            div_document_controls.append(button_save)
               
     def add_summary(self):
         """
@@ -930,9 +872,3 @@ def get_writer(proc) -> WriterBase:
     """
     factory = WriterFactory(proc)
     return factory.create_writer()
-
-def get_translation(key, language_code, default_language='en'):
-    translations = UI_TRANSLATIONS.get(key, {})
-    return translations.get(
-        language_code, translations.get(default_language, '')
-        )

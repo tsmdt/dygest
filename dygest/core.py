@@ -12,7 +12,7 @@ from langdetect import detect, DetectorFactory
 
 from dygest import llms, utils, ner_utils, prompts, json_schemas
 from dygest.translations import LANGUAGES
-from dygest.output_utils import ExportFormats, HTML_Templates
+from dygest.output_utils import ExportFormats
 from dygest.ner_utils import NERlanguages
 
 
@@ -36,7 +36,8 @@ class DygestBaseParams:
     verbose: bool = False
     export_metadata: bool = False
     export_format: ExportFormats = ExportFormats.HTML
-    html_template: HTML_Templates = HTML_Templates.TABS
+    # html_template: HTML_Templates = HTML_Templates.TABS
+    html_template_path: Path = None
 
 
 @dataclass

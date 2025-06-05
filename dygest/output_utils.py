@@ -9,9 +9,6 @@ from pathlib import Path
 from collections import Counter
 from bs4 import BeautifulSoup
 
-from dygest import templates
-from dygest.translations import UI_TRANSLATIONS
-
 
 CATEGORY_COLORS = {
     'ORG': '#f5b222',
@@ -20,12 +17,6 @@ CATEGORY_COLORS = {
     'DATE': '#f4eb67',
     'MISC': '#ff8222',
 }
-
-
-class HTML_Templates(str, Enum):
-    TABS = 'tabs'
-    PLAIN = 'plain'
-    ALL = 'all'
 
 
 class ExportFormats(str, Enum):
@@ -59,141 +50,81 @@ class HTMLWriter(WriterBase):
     Class for writing HTML output.
     """
     export_metadata: bool = field(default=None, init=True)
-    html_template: HTML_Templates = field(default=HTML_Templates.TABS, init=True)
     has_speaker: bool = field(default=False, init=True)
-    write_all_templates: bool = field(default=False, init=True)
+    html_template_path: Path = field(default=False, init=True)
+    html_template: str = field(default=False, init=True)
     
     def __post_init__(self):
-        if self.html_template == HTML_Templates.ALL:
-            # For ALL template type, we'll use TABS as the initial template
-            # The actual template switching will happen in write()
-            self.html_template = HTML_Templates.TABS
-            
-        # Load an HTML template
-        template = self.set_html_template(type=self.html_template)
-
-        # Inject CSS and JavaScript
-        html = template.get('html')
-
-        if 'css_path' in template:
-            css_content = template.get('css_path').read_text()
-            html = html.replace('{css_placeholder}', css_content)
-
-        if 'js_path' in template:
-            js_content = template.get('js_path').read_text()
-            html = html.replace('{js_placeholder}', js_content)
+        # Set an HTML template
+        self._set_html_template()
 
         # Soupify the template
-        self.soup = BeautifulSoup(html, 'html.parser')
+        self.soup = BeautifulSoup(self.html_template, 'html.parser')
         self.has_speaker = False
-        
-    @staticmethod    
-    def set_html_template(type: HTML_Templates) -> dict:
-        """
-        Return HTML template dict with template, css and js filepaths.
-        """
-        html_templates = {
-            HTML_Templates.TABS: {
-                'html': templates.HTML_TABS,
-                'css_path': Path('dygest/static/css/tabs.css').resolve(),
-                'js_path': Path('dygest/static/tabs.js').resolve()
-            },
-            HTML_Templates.PLAIN: {
-                'html': templates.HTML_PLAIN,
-                'css_path': Path('dygest/static/css/plain.css').resolve()
-            }
-        }
-        return html_templates.get(type)
 
-    def _get_write_sequence(self):
+    def _set_html_template(self) -> None:
         """
-        Return an ordered list of callables that must be executed by
-        :py:meth:`write`.  
-        The concrete order depends on the selected HTML template to allow
-        different layouts (e.g. *tabs* vs. *plain*).  
-        Optional blocks that are not relevant for the current document
-        (e.g. no summary available) are represented as ``None`` and must be
-        skipped by the caller.
+        Loads a template folder Path, searches for valid .html, .css and 
+        (optional) .js files and loads them.
         """
-        # TABS
-        if self.html_template == HTML_Templates.TABS:
-            return [
-                self.add_page_title,
-                self.add_summary if self.summary else None,
-                self.add_toc if self.toc else None,
-                self.add_keywords if self.keywords else None,
-                self.add_metadata if self.export_metadata else None,
-                lambda: self.add_main_content(content_editable=True)
-            ]
-        # PLAIN
-        elif self.html_template == HTML_Templates.PLAIN:
-            return [
-                self.add_page_title,
-                self.add_metadata if self.export_metadata else None,
-                self.add_summary if self.summary else None,
-                self.add_keywords if self.keywords else None,
-                self.add_toc if self.toc else None,
-                lambda: self.add_main_content(content_editable=False),
-            ]
-        else:
-            # Fallback to the historic default order
-            return [
-                self.add_page_title,
-                self.add_summary if self.summary else None,
-                self.add_toc if self.toc else None,
-                self.add_keywords if self.keywords else None,
-                self.add_metadata,
-                self.add_main_content
-            ]
+        # Load HTML file (required)
+        html_file = next(self.html_template_path.glob('*.html'))
+        html_content = html_file.read_text()
+
+        # Load CSS file (optional)
+        css_file = next(self.html_template_path.glob('*.css'), None)
+        if css_file:
+            css_content = css_file.read_text()
+            html_content = html_content.replace('/* CSS */', css_content)
+
+        # Load JS file (optional)
+        js_file = next(self.html_template_path.glob('*.js'), None)
+        if js_file:
+            js_content = js_file.read_text()
+            html_content = html_content.replace('/* JS */', js_content)
+
+        self.html_template = html_content
+
+    def _get_write_sequence_from_html(self):
+        """
+        Retrieve a write sequence from an HTML template by checking for 
+        placeholders. Returns an ordered list of callables that must be 
+        executed by write(). The sequence is determined by the presence of 
+        placeholders in the HTML template.
+        """
+        placeholder_mapping = {
+            '<!-- TITLE -->': self.add_page_title,
+            '<!-- SUMMARY -->': self.add_summary if self.summary else None,
+            '<!-- KEYWORDS -->': self.add_keywords if self.keywords else None,
+            '<!-- TOC -->': self.add_toc if self.toc else None,
+            '<!-- METADATA -->': self.add_metadata if self.export_metadata else None,
+            '<!-- CONTENT -->': lambda: self.add_main_content(
+                content_editable='contenteditable' in self.html_template
+                )
+        }
+        
+        # Find all placeholders in order of appearance
+        sequence = []
+        for line in self.html_template.split('\n'):
+            for placeholder, func in placeholder_mapping.items():
+                if placeholder in line and func is not None:
+                    sequence.append(func)
+                    # Remove placeholder from the HTML template
+                    self.html_template = self.html_template.replace(
+                        placeholder, ''
+                    )
+                    break
+        
+        # Update the soup object with the modified template
+        self.soup = BeautifulSoup(self.html_template, 'html.parser')
+        
+        return sequence
         
     def write(self):
         """
-        Build and save the HTML document(s).  
-        If write_all_templates is True, writes both TABS and PLAIN templates.
-        Otherwise, writes only the specified template.
+        Build and save the HTML document.  
         """
-        if self.write_all_templates or self.html_template == HTML_Templates.ALL:
-            # Save current template and output path
-            original_template = self.html_template
-            original_output_path = self.output_filepath
-            
-            # Write TABS template
-            self.html_template = HTML_Templates.TABS
-            base_path = original_output_path.parent / original_output_path.stem
-            self.output_filepath = base_path.with_name(f"{base_path.name}_tabs.html")
-            self._write_single_template()
-            
-            # Write PLAIN template
-            self.html_template = HTML_Templates.PLAIN
-            self.output_filepath = base_path.with_name(f"{base_path.name}_plain.html")
-            self._write_single_template()
-            
-            # Restore original values
-            self.html_template = original_template
-            self.output_filepath = original_output_path
-        else:
-            self._write_single_template()
-
-    def _write_single_template(self):
-        """
-        Internal method to write a single HTML template.
-        """
-        # Reset the soup with the current template
-        template = self.set_html_template(type=self.html_template)
-        html = template.get('html')
-        
-        if 'css_path' in template:
-            css_content = template.get('css_path').read_text()
-            html = html.replace('{css_placeholder}', css_content)
-
-        if 'js_path' in template:
-            js_content = template.get('js_path').read_text()
-            html = html.replace('{js_placeholder}', js_content)
-            
-        self.soup = BeautifulSoup(html, 'html.parser')
-        
-        # Execute the write sequence
-        for block in self._get_write_sequence():
+        for block in self._get_write_sequence_from_html():
             if block is not None:
                 block()
 
@@ -834,7 +765,7 @@ class WriterFactory:
             'light_model': self.proc.light_model,
             'expert_model': self.proc.expert_model,
             'token_count': self.proc.token_count,
-            'sentence_offsets': self.proc.sentence_offsets
+            'sentence_offsets': self.proc.sentence_offsets,
         }
         
         # Get format-specific parameters
@@ -842,8 +773,12 @@ class WriterFactory:
         
         # Handle output filepath
         suffix = self.proc.export_format.value.lower()
-        if self.proc.export_format == ExportFormats.HTML and self.proc.html_template == HTML_Templates.ALL:
-            base_path = self.proc.output_filepath.parent / self.proc.output_filepath.stem
+        if self.proc.export_format == ExportFormats.HTML and self.proc.html_template_path:
+            # Construct the output path with template folder name
+            template_dir = self.proc.html_template_path.name
+            base_path = (
+                self.proc.output_filepath.parent / f"{self.proc.output_filepath.stem}_{template_dir}"
+                )
             output_filepath = base_path.with_suffix(f'.{suffix}')
         else:
             output_filepath = self.proc.output_filepath.with_suffix(f'.{suffix}')
@@ -860,9 +795,13 @@ class WriterFactory:
         if writer_class == HTMLWriter:
             return {
                 'export_metadata': self.proc.export_metadata if self.proc.export_metadata else False,
-                'html_template': self.proc.html_template if self.proc.html_template else HTML_Templates.TABS,
-                'write_all_templates': self.proc.html_template == HTML_Templates.ALL
+                'html_template_path': self.proc.html_template_path,
             }
+            # return {
+            #     'export_metadata': self.proc.export_metadata if self.proc.export_metadata else False,
+            #     'html_template': self.proc.html_template if self.proc.html_template else HTML_Templates.TABS,
+            #     'write_all_templates': self.proc.html_template == HTML_Templates.ALL
+            # }
         return {}
 
 

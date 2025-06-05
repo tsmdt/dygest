@@ -2,7 +2,7 @@ import typer
 from typing import Optional
 from pathlib import Path
 from rich import print
-from dygest.output_utils import ExportFormats, HTML_Templates
+from dygest.output_utils import ExportFormats
 from dygest.config import CONFIG, DEFAULT_CONFIG
 
 app = typer.Typer(
@@ -157,11 +157,14 @@ def main(
         "-sim",
         help="Similarity threshold for removing duplicate topics."
     ),
-    html_template: HTML_Templates = typer.Option(
-        HTML_Templates.TABS,
+    html_template: Path = typer.Option(
+        'templates/plain',
         "--html_template",
         "-ht",
-        help="Choose a HTML template for exporting (tabs, plain, or all).",
+        help="Specify a folder with an HTML template and CSS (and optional JavaScript).",
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True
     ),
     skip_html: bool = typer.Option(
         False,
@@ -194,12 +197,24 @@ def main(
     if CONFIG == DEFAULT_CONFIG:
         print(f"[purple]... Please configure dygest first by running *dygest \
 config* and set your LLMs.")
-        return
+        raise typer.Exit(code=1)
     
-    # Check for file
-    if filepath is None:
-        print('... Please provide a file or folder (--files, -f).')
-        return
+    # Validate HTML template path if HTML export is requested
+    if export_format in [ExportFormats.HTML, ExportFormats.ALL]:
+        if not html_template.exists():
+            typer.secho(
+                f"... Error: HTML template folder does not exist: {html_template}",
+                fg=typer.colors.RED
+            )
+            raise typer.Exit(code=1)
+        # Check for required HTML file
+        html_file = next(html_template.glob('*.html'), None)
+        if not html_file:
+            typer.secho(
+                f"... Error: No HTML file found in template path: {html_template}",
+                fg=typer.colors.RED
+            )
+            raise typer.Exit(code=1)
     
     # Create a list of all files to process
     files_to_process = utils.load_filepath(filepath, skip_html=skip_html)
@@ -225,31 +240,31 @@ config* and set your LLMs.")
             verbose=verbose,
             export_metadata=export_metadata,
             export_format=export_format,
-            html_template=html_template
+            html_template_path=html_template
         )
         
         # Process file
         proc.process_file(file)
 
         # Write output
-        # try:
-        formats_to_export = (
-            [ExportFormats.CSV, ExportFormats.JSON, ExportFormats.HTML]
-            if proc.export_format == ExportFormats.ALL
-            else [proc.export_format, ExportFormats.JSON]
-        )
-        
-        for format in formats_to_export:
-            proc.export_format = format
-            writer = output_utils.get_writer(proc)
-            writer.write()
-        
-        print('[blue][bold]... DONE')
+        try:
+            formats_to_export = (
+                [ExportFormats.CSV, ExportFormats.JSON, ExportFormats.HTML]
+                if proc.export_format == ExportFormats.ALL
+                else [proc.export_format, ExportFormats.JSON]
+            )
+            
+            for format in formats_to_export:
+                proc.export_format = format
+                writer = output_utils.get_writer(proc)
+                writer.write()
+            
+            print('[blue][bold]... DONE')
 
-        # except ValueError as ve:
-        #     print(f'... {ve}')
-        # except Exception as e:
-        #     print(f'... An unexpected error occurred: {e}')
+        except ValueError as ve:
+            print(f'... {ve}')
+        except Exception as e:
+            print(f'... An unexpected error occurred: {e}')
 
 if __name__ == '__main__':
     app()

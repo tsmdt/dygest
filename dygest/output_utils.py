@@ -1,7 +1,5 @@
 import re
-import csv
 import json
-
 from enum import Enum
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -22,7 +20,7 @@ CATEGORY_COLORS = {
 class ExportFormats(str, Enum):
     ALL = 'all'
     JSON = 'json'
-    CSV = 'csv'
+    MARKDOWN = 'markdown'
     HTML = 'html'
     
 
@@ -653,43 +651,106 @@ class HTMLWriter(WriterBase):
 
 
 @dataclass
-class CSVWriter(WriterBase):
+class MarkdownWriter(WriterBase):
     """
-    Class for writing CSV output.
+    Class for writing Markdown output.
     """
+    export_metadata: bool = field(default=None, init=True)
+    has_speaker: bool = field(default=False, init=True)
+
     def write(self):
+        """
+        Build and save the Markdown document.
+        """
+        md_content = []
+
+        # Add title
+        md_content.append(f"# {self.filename}\n")
+
+        # Add metadata if enabled
+        if self.export_metadata:
+            md_content.append("## Metadata\n")
+            md_content.append(f"- Created: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            md_content.append(f"- Light LLM: {self.light_model}")
+            md_content.append(f"- Expert LLM: {self.expert_model}")
+            md_content.append(f"- Chunk size: {self.chunk_size}")
+            md_content.append(f"- Tokens: {self.token_count:,.0f}".replace(',', '.'))
+            
+            if self.named_entities:
+                ner_count = Counter([x['ner_tag'] for x in self.named_entities])
+                ner_counter_string = ', '.join(f"{tag} ({count})" for tag, count in ner_count.items())
+                ner_string = f"{len(self.named_entities)} [{ner_counter_string}]"
+                md_content.append(f"- Entities: {ner_string}")
+            md_content.append("")
+
+        # Add summary if available
+        if self.summary:
+            md_content.append("## Summary\n")
+            md_content.append(f"{self.summary.strip()}\n")
+
+        # Add keywords if available
+        if self.keywords:
+            md_content.append("## Keywords\n")
+            keywords_str = ', '.join([key if key.isupper() else key.lower() for key in self.keywords])
+            md_content.append(f"{keywords_str}\n")
+
+        # Add table of contents if available
+        if self.toc:
+            md_content.append("## Table of Contents\n")
+            for item in self.toc:
+                md_content.append(f"### {item['headline']}")
+                for topic in item['topics']:
+                    location = topic.get('location')
+                    if location:
+                        md_content.append(f"- [{topic['summary'].rstrip('.,;:?!')}](#location-{location})")
+                    else:
+                        md_content.append(f"- {topic['summary'].rstrip('.,;:?!')}")
+                md_content.append("")
+
+        # Add main content
+        md_content.append("## Content\n")
+        
+        # Process the content with NER and speaker tags
+        content = self.input_text
+        
+        # Handle speaker tags
+        pattern = r'\[\d{2}:\d{2}:\d{2}\.\d{3}\] \[(?:SPEAKER_\d+|UNKNOWN)\]|\[(?:SPEAKER_\d+|UNKNOWN)\]'
+        content = re.sub(pattern, lambda m: f"\n\n**{m.group(0)}**\n", content)
+        
+        # Handle NER entities
+        if self.named_entities:
+            # Sort entities by start position in reverse order to avoid position shifts
+            sorted_entities = sorted(self.named_entities, key=lambda x: x['start'], reverse=True)
+            for entity in sorted_entities:
+                entity_text = entity['text']
+                entity_ner_tag = entity['ner_tag']
+                
+                # Skip certain entities
+                if entity_text in ['SPEAKER', 'UNKNOWN', '.']:
+                    continue
+                    
+                # Format entity with markdown
+                formatted_entity = f"<span style='background-color: {CATEGORY_COLORS.get(entity_ner_tag, '')}' title='{entity_ner_tag}'>{entity_text}</span>"
+                content = content[:entity['start']] + formatted_entity + content[entity['end']:]
+        
+        # Add TOC anchors
+        if self.toc:
+            for item in self.toc:
+                for topic in item['topics']:
+                    location = topic.get('location')
+                    if location and location in self.sentence_offsets:
+                        start = self.sentence_offsets[location]
+                        anchor = f"<a id='location-{location}'></a>"
+                        content = content[:start] + anchor + content[start:]
+        
+        # Add the processed content
+        md_content.append(content)
+        
+        # Write to file
         with open(self.output_filepath, 'w', encoding='utf-8') as fout:
-            csv_header = [
-                'filename',
-                'output_filepath',
-                'language',
-                'chunk_size',
-                'token_count',
-                'light_model',
-                'expert_model',
-                'chunks',
-                'summary' if self.summary else None,
-                'keywords' if self.keywords else None,
-                'toc' if self.toc else None
-            ]
-            writer = csv.writer(fout)
-            writer.writerow(csv_header)
-            writer.writerow(
-                [
-                    self.filename,
-                    self.output_filepath,
-                    self.language,
-                    self.chunk_size,
-                    self.token_count,
-                    self.light_model,
-                    self.expert_model,
-                    self.chunks,
-                    self.summary if self.summary else None,
-                    self.keywords if self.keywords else None,
-                    self.toc if self.toc else None
-                ]
-            )
-        print(f"... 🌞 Saved CSV → {self.output_filepath}")
+            fout.write('\n'.join(md_content))
+            
+        print(f"... 🌞 Saved Markdown → {self.output_filepath}")
 
 
 @dataclass
@@ -738,7 +799,7 @@ class WriterFactory:
         """
         writer_mapping = {
             ExportFormats.HTML: HTMLWriter,
-            ExportFormats.CSV: CSVWriter,
+            ExportFormats.MARKDOWN: MarkdownWriter,
             ExportFormats.JSON: JSONWriter
         }
         
@@ -772,8 +833,10 @@ class WriterFactory:
         # Get format-specific parameters
         format_params = self._get_format_specific_params(writer_class)
         
-        # Handle output filepath
+        # Handle different output filepaths
         suffix = self.proc.export_format.value.lower()
+        
+        # .html
         if self.proc.export_format == ExportFormats.HTML and self.proc.html_template_path:
             # Construct the output path with template folder name
             template_dir = self.proc.html_template_path.name
@@ -781,6 +844,10 @@ class WriterFactory:
                 self.proc.output_filepath.parent / f"{self.proc.output_filepath.stem}_{template_dir}"
                 )
             output_filepath = base_path.with_suffix(f'.{suffix}')
+            
+        # .md / Markdown
+        elif self.proc.export_format == ExportFormats.MARKDOWN:
+            output_filepath = self.proc.output_filepath.with_suffix('.md')
         else:
             output_filepath = self.proc.output_filepath.with_suffix(f'.{suffix}')
             

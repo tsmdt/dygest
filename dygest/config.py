@@ -1,4 +1,3 @@
-import typer
 from pathlib import Path
 from rich import print
 from dotenv import dotenv_values, set_key
@@ -61,26 +60,6 @@ def missing_config_requirements() -> bool:
     """
     required_fields = ['LIGHT_MODEL', 'EXPERT_MODEL', 'EMBEDDING_MODEL']
     return any(get_config_value(field) == '' for field in required_fields)
-
-# def save_config(config_updates: dict):
-#     """
-#     Saves the configuration to a .env file using python-dotenv's set_key.
-#     Preserves any existing environment variables that aren't part of the config.
-#     """
-#     try:
-#         for key, value in config_updates.items():                
-#             if value is None and key in DEFAULT_ENV_VALUES:
-#                 value = DEFAULT_ENV_VALUES.get(key)
-#             if value is None and key not in DEFAULT_ENV_VALUES:
-#                 set_key(ENV_FILE, key, '')
-#             else:
-#                 set_key(ENV_FILE, key, str(value))
-
-#         # Reload environment variables after saving
-#         ENV_VALUES.update(dotenv_values(ENV_FILE))
-        
-#     except Exception as e:
-#         typer.echo(f"Error writing .env configuration: {e}", err=True)
 
 def print_config():
     """

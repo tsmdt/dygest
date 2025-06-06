@@ -10,6 +10,11 @@ from typing import Optional
 from pathlib import Path
 
 
+class DefaultTemplates(str, Enum):
+    tabs = "tabs"
+    plain = "plain"
+    
+    
 VALID_FILE_FORMATS = [
     '.txt',
     '.csv',
@@ -20,10 +25,6 @@ VALID_FILE_FORMATS = [
     '.html',
     '.xml'
 ]
-
-class DefaultTemplates(str, Enum):
-    tabs = "tabs"
-    plain = "plain"
 
 def default_html_template(name: str = "tabs") -> Path:
     """

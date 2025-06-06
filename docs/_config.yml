@@ -6,7 +6,8 @@ description: Document Insights Generator
 # Remote Setting
 baseurl: "/dygest"
 url: "https://tsmdt.github.io"
-theme: just-the-docs
+remote_theme: pmarsceill/just-the-docs@v0.3.3
+color_scheme: nil
 search_enabled: true
 nav_enabled: true
 aux_links:

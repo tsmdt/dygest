@@ -166,6 +166,10 @@ Run the **dygest** LLM pipeline with the `dygest run` command:
 ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+## Documentation
+
+[View the documentation](https://tsmdt.github.io/dygest/) for detailed usage information.
+
 ## Acknowledgments
 
 **dygest** uses great python packages:

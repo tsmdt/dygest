@@ -4,7 +4,7 @@ description: Document Insights Generator
 # baseurl: ""
 # url: ""
 # Remote Setting
-baseurl: "/dygest"
+baseurl: "/"
 url: "https://tsmdt.github.io/dygest"
 remote_theme: pmarsceill/just-the-docs@v0.3.3
 color_scheme: nil

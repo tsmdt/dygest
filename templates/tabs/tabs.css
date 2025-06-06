@@ -103,10 +103,10 @@ button.save:hover {
 #back-to-top {
     position: fixed;
     bottom: 20px;
-    right: 20px;
+    right: 50%;
     display: none; 
     z-index: 99; 
-    background-color: #03a9f4;
+    background-color: rgb(154, 167, 210);
     font-weight: 100;
     color: white;
     border: none;
@@ -115,18 +115,18 @@ button.save:hover {
     text-decoration: none;
     font-size: 15px;
     cursor: pointer;
-    border-radius: 20px;
+    border-radius: 10px;
     transition: 0.1s;
     text-transform: none;
     line-height: 1;
     vertical-align: middle;
-    border-bottom: 2px solid #0074aa;
+    border-bottom: 3px solid rgb(181, 188, 211);
 }
 
 #back-to-top:hover {
-    background-color: #0289c7;
-    border-top: 2px solid #0078b0;
-    border-bottom: 2px solid #0078b0;
+    background-color: rgb(141, 151, 184);
+    border-top: 3px solid rgb(181, 188, 211);
+    border-bottom: 0;
 }
 
 ol, ul {

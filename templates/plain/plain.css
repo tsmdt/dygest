@@ -39,6 +39,10 @@ p {
     margin-bottom: 1em;
 }
 
+p:last-child {
+    margin-bottom: 5px;
+}
+
 a {
     color: #3d64bb; 
     text-decoration: none;
@@ -174,6 +178,15 @@ ol, ul {
     font-weight: 500;
     font-size: 95%;
     border-bottom: 1px solid lightgray;
+}
+
+.metadata:last-child {
+    color: slateblue;
+    padding: 15px 10px 10px 10px;
+    font-weight: 500;
+    font-size: 70%;
+    border-top: 1px solid lightgray;
+    border-bottom: none;
 }
 
 .timestamp {

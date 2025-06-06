@@ -698,7 +698,7 @@ class MarkdownWriter(WriterBase):
         if self.toc:
             md_content.append("## Table of Contents\n")
             for item in self.toc:
-                md_content.append(f"### {item['headline']}")
+                md_content.append(f"### {item['headline']}\n")
                 for topic in item['topics']:
                     location = topic.get('location')
                     if location:

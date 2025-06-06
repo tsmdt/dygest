@@ -21,7 +21,7 @@ It generates *summaries*, *keywords* and *table of contents* and exports human-r
 ## How it works
 
 <p align="center">
-  <img src="../assets/dygest_html.png" width="100%">
+  <img src="./assets/dygest_html.png" width="100%">
 </p>
 
 ### TXT processing with litellm

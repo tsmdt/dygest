@@ -34,7 +34,7 @@ def load_tagger(language: str = 'en', precise: bool = False):
     start_time = time.time()
     print('... Loading NER tagger')
 
-    # Load Classifier
+    # Load Classifier    
     try:
         if precise and language in flair_models:
             tagger = Classifier.load(f'{flair_models[language]}-large')

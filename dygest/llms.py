@@ -1,10 +1,8 @@
 import re
-import os
 import time
 import typer
 import warnings
 from rich import print
-from typing import Optional
 from openai import OpenAIError
 from litellm import (
     completion,
@@ -12,29 +10,33 @@ from litellm import (
     supports_response_schema,
     BadRequestError
     )
+from dotenv import dotenv_values
+from dygest.config import ENV_FILE
 
-def get_api_base(model_name: str) -> Optional[str]:
+def get_provider_config(model_name: str):
     """
-    Determine the api_base URL based on the LLM service provider.
+    Return model, api_base, api_key
     """
-    api_base_mappings = {
-        'ollama': 'http://localhost:11434'
-    }
-    provider = model_name.split('/')[0].lower()
-    return api_base_mappings.get(provider, None)
-
-def get_api_key(model_name: str) -> Optional[str]:
-    """
-    Determine and get the api_key based on the LLM service provider.
-    """
-    provider = model_name.split('/')[0].lower()
-    if provider != 'ollama':
-        api_key = os.getenv(f'{provider.upper()}_API_KEY')
-        if not api_key:
-            print(f"Please set your {provider.upper()}_API_KEY in your \
-environment using: export {provider.upper()}_API_KEY='your_api_key'")
-        return api_key
-    return None
+    ENV_VALUES = dotenv_values(ENV_FILE) if ENV_FILE.exists() else {}
+    
+    provider = model_name.split('/')
+    
+    if len(provider) == 3:
+        # openai/exampleprovider/qwen2.5:latest
+        prefix = provider[0]
+        custom_provider = provider[1]
+        model = f"{prefix}/{provider[2]}"
+        
+    elif len(provider) == 2:
+        # ollama/qwen2.5:latest
+        custom_provider = provider[0]
+        model = f"{custom_provider}/{provider[1]}"
+    
+    # Load custom api config from .env
+    api_base = ENV_VALUES.get(f'{custom_provider.upper()}_API_BASE', None)
+    api_key = ENV_VALUES.get(f'{custom_provider.upper()}_API_KEY', None)
+    
+    return model, api_base, api_key
 
 def set_llm_response_format(
         model: str,
@@ -133,8 +135,7 @@ def call_llm(
     """
     # Check for api_key and api_base
     if not api_base or api_key:
-        api_base = get_api_base(model)
-        api_key = get_api_key(model)
+        model, api_base, api_key = get_provider_config(model)
 
     # Set LLM response output formats ('json_schema' or 'text')
     response_format = set_llm_response_format(model, output_format, json_schema)
@@ -170,7 +171,7 @@ def call_llm(
     except BadRequestError as e:
         print(f"[purple] ...  Error: Please configure the model(s) your are \
 using with the correct LLM provider (e.g. 'ollama/llama3.1:latest', \
-'openai/gpt-4o-mini).")
+'openai/gpt-4o-mini)'.")
         raise typer.Exit(code=1) 
     except OpenAIError as e:
         print(f"[purple] ... Error: {e}")
@@ -198,8 +199,7 @@ def get_embeddings(
     A dictionary containing the embeddings.
     """
     if not api_base or api_key:
-        api_base = get_api_base(model)
-        api_key = get_api_key(model)
+        model, api_base, api_key = get_provider_config(model)
     
     try:
         response = embedding(

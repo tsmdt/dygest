@@ -2,6 +2,9 @@ import json
 import re
 import json_repair
 import typer
+import importlib.resources as pkg_resources
+import dygest
+from enum import Enum
 from rich import print
 from typing import Optional
 from pathlib import Path
@@ -17,6 +20,20 @@ VALID_FILE_FORMATS = [
     '.html',
     '.xml'
 ]
+
+class DefaultTemplates(str, Enum):
+    tabs = "tabs"
+    plain = "plain"
+
+def default_html_template(name: str = "tabs") -> Path:
+    """
+    Returns the path to one of the installed template directories inside 
+    the dygest package. 'name' can be 'tabs' or 'plain'.
+    """
+    if name not in ("tabs", "plain"):
+        raise ValueError(f"Unknown template name: {name}. Choose 'tabs' or 'plain'.")
+    templates_dir = pkg_resources.files(dygest) / "templates" / name
+    return Path(templates_dir)
 
 def resolve_input_dir(filepath: str = None, output_dir: str = None) -> Path:
     """

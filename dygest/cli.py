@@ -3,17 +3,22 @@ import json
 from typing import Optional
 from pathlib import Path
 from rich import print
-
+from dygest import utils
 from dygest.output_utils import ExportFormats
-from dygest.config import CONFIG, DEFAULT_CONFIG
 
 app = typer.Typer(
     no_args_is_help=True,
-    help='🌞 DYGEST: Document Insights Generator 🌞'
+    help='DYGEST: Document Insights Generator 🌞'
 )
 
 @app.command("config", no_args_is_help=True)
 def configure(
+    add_custom: Optional[str] = typer.Option(
+        None,
+        "--add_custom",
+        "-add",
+        help="Add a custom key-value pair to the config .env (format: KEY=VALUE).",
+    ),
     light_model: str = typer.Option(
         None,
         "--light_model",
@@ -66,12 +71,6 @@ def configure(
         "-lang",
         help='Language of file(s) for NER. Defaults to auto-detection.',
     ),
-    api_base: str = typer.Option(
-        None,
-        "--api_base",
-        '-api',
-        help="Set custom API base url for providers like Ollama and Hugginface."
-    ),
     view_config: bool = typer.Option(
         False,
         "--view_config",
@@ -80,40 +79,77 @@ def configure(
     )
 ):
     """
-    Configure LLMs, Embeddings and Named Entity Recognition.
+    Configure LLMs, Embeddings and Named Entity Recognition. (Config file: .env)
     """
-    from dygest.config import load_config, save_config, print_config
+    from dygest.config import print_config, ENV_FILE, set_key
     from dygest.ner_utils import NERlanguages
     
-    global CONFIG
-    if CONFIG is None:
-        CONFIG = load_config()
-    
     if view_config:
-        print_config(CONFIG)
+        print_config()
         return
-        
-    CONFIG['light_model'] = light_model if light_model is not None else CONFIG.get('light_model')
-    CONFIG['expert_model'] = expert_model if expert_model is not None else CONFIG.get('expert_model')
-    CONFIG['embedding_model'] = embedding_model if embedding_model is not None else CONFIG.get('embedding_model')
-    CONFIG['temperature'] = temperature if temperature is not None else CONFIG.get('temperature')
-    CONFIG['sleep'] = sleep if sleep is not None else CONFIG.get('sleep')
-    CONFIG['api_base'] = api_base if api_base is not None else CONFIG.get('api_base')
-    CONFIG['chunk_size'] = chunk_size if chunk_size is not None else CONFIG.get('chunk_size')
-    CONFIG['ner'] = ner if ner is not None else CONFIG.get('ner')
-    CONFIG['precise'] = precise if precise is not None else CONFIG.get('precise')
-
-    # Convert language if provided
+    
+    # Update individual config values if provided
+    if light_model is not None:
+        set_key(ENV_FILE, 'LIGHT_MODEL', light_model)
+    
+    if expert_model is not None:
+        set_key(ENV_FILE, 'EXPERT_MODEL', expert_model)
+    
+    if embedding_model is not None:
+        set_key(ENV_FILE, 'EMBEDDING_MODEL', embedding_model)
+    
+    if temperature is not None:
+        set_key(ENV_FILE, 'TEMPERATURE', str(temperature))
+    
+    if sleep is not None:
+        set_key(ENV_FILE, 'SLEEP', str(sleep))
+    
+    if chunk_size is not None:
+        set_key(ENV_FILE, 'CHUNK_SIZE', str(chunk_size))
+    
+    if ner is not None:
+        set_key(ENV_FILE, 'NER', str(ner).lower())
+    
+    if precise is not None:
+        set_key(ENV_FILE, 'NER_PRECISE', str(precise).lower())
+    
+    # Add language to NER CONFIG if provided
     if language is not None:
         try:
-            CONFIG['language'] = NERlanguages(language)
+            lang_value = NERlanguages(language).value
+            set_key(ENV_FILE, 'NER_LANGUAGE', lang_value)
         except ValueError:
-            typer.echo(f"... Warning: '{language}' is not a valid NER language. Using 'auto' instead.", err=True)
-            CONFIG['language'] = NERlanguages.AUTO
+            typer.secho(
+                f"... Warning: '{language}' is not a valid NER language. Using 'auto' instead.",
+                fg=typer.colors.MAGENTA
+            )
+            set_key(ENV_FILE, 'NER_LANGUAGE', NERlanguages.AUTO.value)
     
-    # Save and print config
-    save_config(CONFIG)
-    print_config(CONFIG)
+    # Handle custom key-value pair if provided
+    if add_custom is not None:
+        if '=' not in add_custom:
+            typer.secho(
+                "... Error: Custom key-value pair must be in format KEY=VALUE",
+                fg=typer.colors.RED
+            )
+            raise typer.Exit(code=1)
+        
+        key, value = add_custom.split('=', 1)
+        key = key.strip()
+        value = value.strip()
+        
+        if not key:
+            typer.secho(
+                "... Error: Key cannot be empty",
+                fg=typer.colors.RED
+            )
+            raise typer.Exit(code=1)
+        
+        # Add custom key-value pair
+        set_key(ENV_FILE, key, value)
+    
+    # Print updated config
+    print_config()
 
 @app.command("run", no_args_is_help=True)
 def main(
@@ -159,11 +195,17 @@ def main(
         "-sim",
         help="Similarity threshold for removing duplicate topics."
     ),
-    html_template: Path = typer.Option(
-        'templates/plain',
-        "--html_template",
-        "-ht",
-        help="Specify a folder with an HTML template, CSS and (optional) JavaScript.",
+    html_template_default: utils.DefaultTemplates = typer.Option(
+        utils.DefaultTemplates.tabs,
+        "--default_template",
+        "-dt",
+        help="Choose a built-in HTML template ('tabs' or 'plain')."
+    ),
+    html_template_user: Optional[Path] = typer.Option(
+        None,
+        "--user_template",
+        "-ut",
+        help="Provide a custom folder path for an HTML template.",
         file_okay=False,
         dir_okay=True,
         resolve_path=True
@@ -190,29 +232,38 @@ def main(
     """
     Create insights for your documents (summaries, keywords, TOCs).
     """
-    from dygest.config import load_config
     from dygest import core, output_utils, utils, translations
-    global CONFIG
+    from dygest.ner_utils import NERlanguages
+    from dygest.config import missing_config_requirements, get_config_value
     
-    # Load config and make sure it is correctly set
-    CONFIG = load_config()
-    if CONFIG == DEFAULT_CONFIG:
-        print(f"[purple]... Please configure dygest first by running *dygest \
-config* and set your LLMs.")
+    # Check if required configuration is set
+    if missing_config_requirements():
+        print(f"[purple]... Please configure dygest first by running *dygest config* and set your LLMs.")
         raise typer.Exit(code=1)
+    
+    # Determine which HTML template folder to use
+    if html_template_user is not None:
+        chosen_template = html_template_user
+    else:
+        # Use built-in template based on the name
+        try:
+            chosen_template = utils.default_html_template(html_template_default.value)
+        except ValueError as e:
+            typer.secho(f"... Error: {e}", fg=typer.colors.RED)
+            raise typer.Exit(code=1)
     
     # Validate HTML template path if HTML export is requested
     if export_format in [ExportFormats.HTML, ExportFormats.ALL]:
-        if not html_template.exists():
+        if not chosen_template.exists():
             typer.secho(
-                f"... Error: HTML template folder does not exist: {html_template}",
+                f"... Error: HTML template folder does not exist: {chosen_template}",
                 fg=typer.colors.RED
             )
             raise typer.Exit(code=1)
-        html_file = next(html_template.glob('*.html'), None)
+        html_file = next(chosen_template.glob('*.html'), None)
         if not html_file:
             typer.secho(
-                f"... Error: No HTML file found in template path: {html_template}",
+                f"... Error: No HTML file found in template path: {chosen_template}",
                 fg=typer.colors.RED
             )
             raise typer.Exit(code=1)
@@ -230,7 +281,11 @@ config* and set your LLMs.")
                     
                 # Validate JSON structure
                 if not utils.validate_json_input(json_data):
-                    raise ValueError("Invalid JSON structure")
+                    typer.secho(
+                        f"... Error: The provided JSON does not follow the dygest JSON format.",
+                        fg=typer.colors.RED
+                    )
+                    raise typer.Exit(code=1)
                     
                 # Create processor with minimal required attributes
                 proc = core.DygestProcessor(
@@ -238,21 +293,21 @@ config* and set your LLMs.")
                     output_dir=utils.resolve_input_dir(Path(filepath), output_dir),
                     light_model=json_data['light_model'],
                     expert_model=json_data['expert_model'],
-                    embedding_model=CONFIG['embedding_model'],
-                    temperature=CONFIG['temperature'],
-                    sleep=CONFIG['sleep'],
+                    embedding_model=get_config_value('EMBEDDING_MODEL'),
+                    temperature=get_config_value('TEMPERATURE', 0.0, float),
+                    sleep=get_config_value('SLEEP', 0.0, float),
                     chunk_size=json_data['chunk_size'],
                     add_toc='toc' in json_data,
                     add_summaries='summary' in json_data,
                     add_keywords='keywords' in json_data,
-                    add_ner=CONFIG['ner'],
+                    add_ner=get_config_value('NER', False, bool),
                     sim_threshold=sim_threshold,
                     provided_language=json_data['language'],
-                    precise=CONFIG['precise'],
+                    precise=get_config_value('NER_PRECISE', False, bool),
                     verbose=verbose,
                     export_metadata=export_metadata,
                     export_format=export_format,
-                    html_template_path=html_template
+                    html_template_path=chosen_template
                 )
                 
                 # Set the data from JSON
@@ -283,23 +338,23 @@ config* and set your LLMs.")
             proc = core.DygestProcessor(
                 filepath=filepath,
                 output_dir=utils.resolve_input_dir(Path(filepath), output_dir),
-                light_model=CONFIG['light_model'],
-                expert_model=CONFIG['expert_model'],
-                embedding_model=CONFIG['embedding_model'],
-                temperature=CONFIG['temperature'],
-                sleep=CONFIG['sleep'],
-                chunk_size=CONFIG['chunk_size'],
+                light_model=get_config_value('LIGHT_MODEL'),
+                expert_model=get_config_value('EXPERT_MODEL'),
+                embedding_model=get_config_value('EMBEDDING_MODEL'),
+                temperature=get_config_value('TEMPERATURE', 0.0, float),
+                sleep=get_config_value('SLEEP', 0.0, float),
+                chunk_size=get_config_value('CHUNK_SIZE', 0, int),
                 add_toc=toc,
                 add_summaries=summarize,
                 add_keywords=keywords,
-                add_ner=CONFIG['ner'],
+                add_ner=get_config_value('NER', False, bool),
                 sim_threshold=sim_threshold,
-                provided_language=CONFIG['language'],
-                precise=CONFIG['precise'],
+                provided_language=get_config_value('NER_LANGUAGE', NERlanguages.AUTO),
+                precise=get_config_value('NER_PRECISE', False, bool),
                 verbose=verbose,
                 export_metadata=export_metadata,
                 export_format=export_format,
-                html_template_path=html_template
+                html_template_path=chosen_template
             )
             
             # Process file
@@ -334,4 +389,3 @@ config* and set your LLMs.")
 
 if __name__ == '__main__':
     app()
-    

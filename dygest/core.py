@@ -29,7 +29,7 @@ class DygestBaseParams:
     add_toc: bool = False
     add_summaries: bool = False
     add_keywords: bool = False
-    add_ner: bool = True
+    add_ner: bool = False
     sim_threshold: float = 0.8
     provided_language: NERlanguages = NERlanguages.AUTO
     precise: bool = False
@@ -66,17 +66,13 @@ class DygestProcessor(DygestBaseParams):
         
         Returns:
             str: An ISO 639-1 language code ('en', 'de', 'es' ...)
-        """
-        language = self.provided_language
-            
-        if language == 'auto':
+        """            
+        if self.provided_language == 'auto':
             DetectorFactory.seed = 0
             language_ISO = detect(self.text[:500])
-
-            if self.verbose:
-                print(f"... Detected language '{language_ISO}'")
+            print(f"... Detected language '{language_ISO}'")
         else:
-            language_ISO = language
+            language_ISO = language.value
         return language_ISO   
         
     def run_ner(self) -> list[str] | None:
@@ -476,15 +472,15 @@ class DygestProcessor(DygestBaseParams):
             print(f"... Total tokens in file: {self.token_count}")
             print(f"... Number of chunks: {len(self.chunks)}")
             
-        # Run language detection 
+        # Run language detection
         if not self.language_ISO:
             self.language_ISO = self.run_with_error_handling(
                 self.run_language_detection,
                 error_message="Error during language detection"
             )
             
-        # Transform ISO code to string ('en' → 'English')
-        self.language_string = LANGUAGES.get(self.language_ISO).title()
+            # Transform ISO code to string ('en' → 'English')
+            self.language_string = LANGUAGES.get(self.language_ISO).title()
         
         # Run Named Entity Recognition (NER)
         if self.add_ner:

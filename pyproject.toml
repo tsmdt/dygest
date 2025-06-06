@@ -32,5 +32,20 @@ dependencies     = [
 [project.scripts]
 dygest = "dygest.cli:app"
 
+[tool.setuptools]
+include-package-data = true
+
 [tool.setuptools.packages.find]
 where = ["."]
+
+[tool.setuptools.package-data]
+"dygest" = [
+    # Contents of templates/plain
+    "templates/plain/*.css",
+    "templates/plain/*.html",
+
+    # Contents of templates/tabs
+    "templates/tabs/*.css",
+    "templates/tabs/*.html",
+    "templates/tabs/*.js"
+]

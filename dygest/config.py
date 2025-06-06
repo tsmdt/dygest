@@ -1,113 +1,122 @@
-import yaml
 import typer
-from rich import print
-from enum import Enum
 from pathlib import Path
+from rich import print
+from dotenv import dotenv_values, set_key
+from dygest.ner_utils import NERlanguages
 
-DEFAULT_CONFIG = {
-    'light_model': None,
-    'expert_model': None,
-    'embedding_model': None,
-    'temperature': 0.1,
-    'api_base': None,
-    'chunk_size': 1000,
-    'ner': False,
-    'language': 'auto',
-    'precise': False,
-    'sleep': 2.5
+# Default .env values
+DEFAULT_ENV_VALUES = {
+    'LIGHT_MODEL': None,
+    'EXPERT_MODEL': None,
+    'EMBEDDING_MODEL': None,
+    'TEMPERATURE': 0.1,
+    'SLEEP': 2.5,
+    'CHUNK_SIZE': 1000,
+    'NER': False,
+    'NER_LANGUAGE': 'auto',
+    'NER_PRECISE': False,
+    'OPENAI_API_KEY': None,
+    'GROQ_API_KEY': None,
+    'OLLAMA_API_BASE': 'http://localhost:11434'
 }
 
-CONFIG_FILE = Path.cwd() / "dygest_config.yaml"
-CONFIG = None
-
-def missing_config_requirements(config: dict) -> bool:
+def get_config_value(key: str, default=None, converter=None):
     """
-    Checks if all required CONFIG fields are set by the user.
+    Helper function to get and convert environment variables.
     """
-    required_fields = [
-        'light_model', 
-        'expert_model', 
-        'embedding_model'
-        ]
-    return any(config.get(field) is None for field in required_fields)
-
-def load_config() -> dict:
-    """
-    Loads the configuration from a JSON file if it exists.
-    Otherwise, returns the default configuration.
-    Converts the 'language' field to the NERlanguages Enum if possible.
-    """
-    from dygest.ner_utils import NERlanguages
-
-    if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-            try:
-                config = yaml.safe_load(f)
-            except yaml.YAMLError as e:
-                print(f"[purple]... Error parsing YAML configuration: {e}", err=True)
-                
-            # Merge with DEFAULT_CONFIG to ensure all keys are present
-            merged_config = DEFAULT_CONFIG.copy()
-            merged_config.update(config)
-
-            # Convert 'language' from string to Enum if possible
-            if 'language' in merged_config and isinstance(merged_config['language'], str):
+    value = ENV_VALUES.get(key, default)
+    if converter and value is not None:
+        try:
+            # Handle string 'true'/'false' values first
+            if isinstance(value, str):
+                if value.lower() == 'true':
+                    return True
+                if value.lower() == 'false':
+                    return False
+            # Then handle boolean values
+            if isinstance(value, bool):
+                return value
+            # Handle NERlanguages
+            if key == 'NER_LANGUAGE':
                 try:
-                    merged_config['language'] = NERlanguages(merged_config['language'])
+                    return NERlanguages(value)
                 except ValueError:
-                    print(f"[purple]... Warning: '{merged_config['language']}' is not a valid NER language. Defaulting to 'auto'.", err=True)
-                    merged_config['language'] = NERlanguages.AUTO
-            else:
-                merged_config['language'] = NERlanguages.AUTO
+                    print(
+                        f"[purple]... Warning: Invalid NER language '{value}'. Using 'auto' instead.",
+                        err=True
+                    )
+                    return NERlanguages.AUTO
+            return converter(value)
+        except (ValueError, TypeError):
+            print(
+                f"[purple]... Warning: Invalid value for {key}. Using default.",
+                err=True
+            )
+            return default
+    return value
 
-            return merged_config
-            
-    else:
-        config = DEFAULT_CONFIG.copy()
-        config['language'] = 'auto'
-        return config
+def missing_config_requirements() -> bool:
+    """
+    Checks if all required configuration fields are set.
+    """
+    required_fields = ['LIGHT_MODEL', 'EXPERT_MODEL', 'EMBEDDING_MODEL']
+    return any(get_config_value(field) == '' for field in required_fields)
 
-def save_config(config: dict):
-    """
-    Saves the configuration to a JSON file.
-    Converts Enum fields to their string values for JSON compatibility.
-    """
-    config_to_save = config.copy()
-    if isinstance(config_to_save.get('language'), Enum):
-        config_to_save['language'] = config_to_save['language'].value
+# def save_config(config_updates: dict):
+#     """
+#     Saves the configuration to a .env file using python-dotenv's set_key.
+#     Preserves any existing environment variables that aren't part of the config.
+#     """
+#     try:
+#         for key, value in config_updates.items():                
+#             if value is None and key in DEFAULT_ENV_VALUES:
+#                 value = DEFAULT_ENV_VALUES.get(key)
+#             if value is None and key not in DEFAULT_ENV_VALUES:
+#                 set_key(ENV_FILE, key, '')
+#             else:
+#                 set_key(ENV_FILE, key, str(value))
 
-    try:
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-            yaml.safe_dump(config_to_save, f, default_flow_style=False, sort_keys=False)
-    except yaml.YAMLError as e:
-        typer.echo(f"Error writing YAML configuration: {e}", err=True)
+#         # Reload environment variables after saving
+#         ENV_VALUES.update(dotenv_values(ENV_FILE))
+        
+#     except Exception as e:
+#         typer.echo(f"Error writing .env configuration: {e}", err=True)
 
-def print_config(config: dict):
+def print_config():
     """
-    Prints the LLM and embedding configuration in a structured format.
+    Prints the current configuration in a structured format.
     """
-    # Check if requrired fields are set
-    if missing_config_requirements(config):
+    # Reload environment variables after saving
+    ENV_VALUES.update(dotenv_values(ENV_FILE))
+    
+    # Check if required fields are set
+    if missing_config_requirements():
         print("[purple]... Please configure all required fields.")
     
-    language_val = config.get('language')
-    if isinstance(language_val, Enum):
-        language_val = language_val.value  # If Enum, get its value
-    elif not language_val:
-        language_val = 'auto'
+    for key, value in ENV_VALUES.items():
+        if value == '':
+            value = 'None'
+        if 'API_KEY' in key:
+            if not value == 'None':
+                print(f"[deep_pink2]... ... {key:<27}→ [light_pink4]{value[:6]}...{value[-4:]}")
+            else:
+                print(f"[deep_pink2]... ... {key:<27}→ [light_pink4]{value}")
+        elif 'MODEL' in key:
+            key_name = f"{key} (required)"
+            print(f"[deep_pink2]... ... {key_name:<27}→ [light_pink4]{value}")
+        else:
+            print(f"[deep_pink2]... ... {key:<27}→ [light_pink4]{value}")
 
-    formatted_config = {
-        "Light LLM (required)": config.get('light_model') or "None",
-        "Expert LLM (required)": config.get('expert_model') or "None",
-        "Embedding model (required)": config.get('embedding_model') or "None",
-        "Temperature": config.get('temperature', 0.0),
-        "Sleep": f"{config.get('sleep', 0.0)} second(s)",
-        "Chunk size": config.get('chunk_size', 0),
-        "NER": config.get('ner', False),
-        "NER precise": config.get('precise', False),
-        "NER language": language_val,
-        "API Base": config.get('api_base') or "None",
-    }
-    
-    for key, value in formatted_config.items():
-        print(f"[deep_pink2]... ... {key:<27}→ [light_pink4]{value}")
+# Initialize environment variables
+ENV_FILE = Path.cwd() / ".env"
+if not ENV_FILE.exists():
+    ENV_FILE.touch()
+    # Write all default values to a fresh .env file
+    for key, value in DEFAULT_ENV_VALUES.items():
+        if value is None:
+            set_key(ENV_FILE, key, '')
+        else:
+            set_key(ENV_FILE, key, str(value))
+    print("[purple]... New .env file created with default values.")
+
+ENV_VALUES = dotenv_values(ENV_FILE)

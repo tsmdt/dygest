@@ -798,11 +798,6 @@ class WriterFactory:
                 'export_metadata': self.proc.export_metadata if self.proc.export_metadata else False,
                 'html_template_path': self.proc.html_template_path,
             }
-            # return {
-            #     'export_metadata': self.proc.export_metadata if self.proc.export_metadata else False,
-            #     'html_template': self.proc.html_template if self.proc.html_template else HTML_Templates.TABS,
-            #     'write_all_templates': self.proc.html_template == HTML_Templates.ALL
-            # }
         return {}
 
 

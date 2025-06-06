@@ -1,3 +1,36 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires    = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name             = "dygest"
+version          = "0.8"
+description      = "DYGEST: Document Insights Generator"
+readme           = "README.md"
+requires-python  = ">=3.10"
+license          = { text = "MIT" }
+authors          = [ { name = "Thomas Schmidt" } ]
+urls             = { "Homepage" = "https://github.com/tsmdt/dygest" }
+classifiers      = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies     = [
+    "click==8.1.8",
+    "typer==0.15.1",
+    "tiktoken==0.8.0",
+    "beautifulsoup4==4.12.3",
+    "flair==0.15.1",
+    "tqdm==4.67.1",
+    "langdetect==1.0.9",
+    "json_repair==0.46.1",
+    "litellm==1.54.1",
+    "markitdown==0.1.2"
+]
+
+[project.scripts]
+dygest = "dygest.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]

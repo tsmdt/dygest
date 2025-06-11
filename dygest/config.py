@@ -2,6 +2,7 @@ from pathlib import Path
 from rich import print
 from dotenv import dotenv_values, set_key
 from dygest.ner_utils import NERlanguages
+import typer
 
 # Default .env values
 DEFAULT_ENV_VALUES = {
@@ -18,6 +19,25 @@ DEFAULT_ENV_VALUES = {
     'GROQ_API_KEY': None,
     'OLLAMA_API_BASE': 'http://localhost:11434'
 }
+
+def validate_model_name(model_name: str) -> bool:
+    """
+    Validate the model name structure.
+    Valid formats:
+    - "openai/provider/model" (for providers not in the litellm model list)
+        - Example: openai/exampleprovider/qwen2.5:latest
+    - "provider/model" (for litellm providers)
+        - Example: ollama/qwen2.5:latest
+    """
+    if not model_name:
+        return True  # Allow empty values during initial setup
+        
+    parts = model_name.split('/')
+    if len(parts) not in [2, 3]:
+        return False
+    if len(parts) == 3 and parts[0] != 'openai':
+        return False
+    return True
 
 def get_config_value(key: str, default=None, converter=None):
     """
@@ -45,6 +65,15 @@ def get_config_value(key: str, default=None, converter=None):
                         err=True
                     )
                     return NERlanguages.AUTO
+            # Validate model names
+            if 'MODEL' in key and not validate_model_name(value):
+                typer.secho(
+                    f"Invalid model name format for {key}. Must be either:\n"
+                    "- 'provider/model' (e.g. 'ollama/qwen2.5:latest')\n"
+                    "- 'openai/provider/model' (e.g. 'openai/exampleprovider/qwen2.5:latest')",
+                    fg=typer.colors.RED
+                )
+                raise typer.Exit(code=1)
             return converter(value)
         except (ValueError, TypeError):
             print(

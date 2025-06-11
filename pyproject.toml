@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name             = "dygest"
-version          = "0.8"
+version          = "0.8.1"
 description      = "DYGEST: Document Insights Generator"
 readme           = "README.md"
 requires-python  = ">=3.10"
@@ -24,8 +24,8 @@ dependencies     = [
     "flair==0.15.1",
     "tqdm==4.67.1",
     "langdetect==1.0.9",
-    "json_repair==0.46.1",
-    "litellm==1.54.1",
+    "json_repair==0.46.2",
+    "litellm==1.72.2",
     "markitdown==0.1.2"
 ]
 

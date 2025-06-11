@@ -1,21 +1,30 @@
 import re
 import time
 import typer
-import warnings
+import asyncio
+from typing import Tuple
 from rich import print
 from openai import OpenAIError
 from litellm import (
     completion,
+    acompletion,
     embedding,
+    aembedding,
     supports_response_schema,
     BadRequestError
     )
 from dotenv import dotenv_values
 from dygest.config import ENV_FILE
 
-def get_provider_config(model_name: str):
+
+def get_provider_config(model_name: str) -> Tuple[str, str, str]:
     """
     Return model, api_base, api_key
+    Expects a model_name of the following structure:
+    - "openai/provider/model" (for providers not in the litellm model list)
+        - Example: openai/exampleprovider/qwen2.5:latest
+    - "provider/model" (for litellm providers)
+        - Example: ollama/qwen2.5:latest
     """
     ENV_VALUES = dotenv_values(ENV_FILE) if ENV_FILE.exists() else {}
     
@@ -26,12 +35,18 @@ def get_provider_config(model_name: str):
         prefix = provider[0]
         custom_provider = provider[1]
         model = f"{prefix}/{provider[2]}"
-        
     elif len(provider) == 2:
         # ollama/qwen2.5:latest
         custom_provider = provider[0]
         model = f"{custom_provider}/{provider[1]}"
-    
+    else:
+        typer.secho(
+            "... Error: Model name must be in format 'provider/model' (e.g. 'ollama/qwen2.5:latest') "
+            "or 'openai/provider/model' (e.g. 'openai/exampleprovider/qwen2.5:latest')",
+            fg=typer.colors.RED
+        )
+        raise typer.Exit(code=1)
+        
     # Load custom api config from .env
     api_base = ENV_VALUES.get(f'{custom_provider.upper()}_API_BASE', None)
     api_key = ENV_VALUES.get(f'{custom_provider.upper()}_API_KEY', None)
@@ -53,8 +68,7 @@ def set_llm_response_format(
         by using the supports_response_schema function. If supported:
           - If no JSON schema is provided, returns a basic 'json_schema' type.
           - If a JSON schema is provided and the provider is 'groq', returns
-            the schema under the key 'json_object' (to accommodate groq API
-            requirements).
+            a simplified format that Groq can handle.
           - Otherwise, returns the schema under the key 'json_schema'.
         If structured output is not supported, it falls back to plain text 
         output.
@@ -81,10 +95,10 @@ def set_llm_response_format(
                 response_format = {
                     'type': 'json_schema'
                     }
-            elif json_schema and model.split('/')[0] == 'groq':
+            elif json_schema and provider == 'groq':
+                # Simplified format for Groq
                 response_format = {
-                    'type': 'json_schema',
-                    'json_object': json_schema # groq API uses different key
+                    'type': 'text'
                 }
             else:
                 response_format = {
@@ -141,27 +155,83 @@ def call_llm(
     response_format = set_llm_response_format(model, output_format, json_schema)
 
     try:
-        # Catch httpx deprecation warning
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", 
-                category=DeprecationWarning, 
-                module="httpx._content"
-                )
-            response = completion(
-                model=model,
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                    }],
-                temperature=temperature,
-                api_key=api_key,
-                base_url=api_base,
-                response_format=response_format
-                )
+        response = completion(
+            model=model,
+            messages=[{
+                "role": "user",
+                "content": prompt
+                }],
+            temperature=temperature,
+            api_key=api_key,
+            base_url=api_base,
+            response_format=response_format
+            )
 
         if sleep_time > 0:
             time.sleep(sleep_time)
+        
+        # Clean <think> responses from reasoning models like DeepSeek
+        response = remove_reasoning(response)
+
+        return response
+
+    except BadRequestError as e:
+        print(f"[purple] ...  Error: Please configure the model(s) your are \
+using with the correct LLM provider (e.g. 'ollama/llama3.1:latest', \
+'openai/gpt-4o-mini)'.")
+        raise typer.Exit(code=1) 
+    except OpenAIError as e:
+        print(f"[purple] ... Error: {e}")
+        raise typer.Exit(code=1) 
+    except Exception as e:
+        print(f"[purple] ... An unexpected error occurred: {e}")
+        raise typer.Exit(code=1) 
+
+async def call_allm(
+    prompt: str = None, 
+    model: str = None,
+    output_format: str = 'text', # 'json_schema' or 'text'
+    json_schema: None | dict = None,
+    temperature: float = 0.1, 
+    api_key: str = None,
+    api_base: str = None,
+    sleep_time: float = 0.0
+    ):
+    """
+    Async version of call_llm using litellm's acompletion function.
+    Note: Set the environment variable for the chosen provider's API key.
+    
+    Parameters:
+    - prompt: The prompt template
+    - text_input: The input text to be summarized or processed
+    - model: The LLM model (e.g., 'openai/gpt-3.5-turbo', 'anthropic/claude-2',
+             'huggingface/...', 'ollama/...') 
+    - temperature: The LLM sampling temperature
+    - api_base: Optional API base URL for some models (like Ollama or custom 
+                Hugging Face endpoints)
+    """
+    # Check for api_key and api_base
+    if not api_base or api_key:
+        model, api_base, api_key = get_provider_config(model)
+
+    # Set LLM response output formats ('json_schema' or 'text')
+    response_format = set_llm_response_format(model, output_format, json_schema)
+
+    try:
+        response = await acompletion(
+            model=model,
+            messages=[{
+                "role": "user",
+                "content": prompt
+                }],
+            temperature=temperature,
+            api_key=api_key,
+            base_url=api_base,
+            response_format=response_format
+            )
+
+        if sleep_time > 0:
+            await asyncio.sleep(sleep_time)
         
         # Clean <think> responses from reasoning models like DeepSeek
         response = remove_reasoning(response)
@@ -203,6 +273,44 @@ def get_embeddings(
     
     try:
         response = embedding(
+            input=text,
+            model=model,
+            api_key=api_key,
+            api_base=api_base
+        )
+        
+        return response.data[0]['embedding']
+    
+    except OpenAIError as e:
+        print(f"[purple] ... An OpenAI API error occurred: {e}")
+        raise typer.Exit(code=1) 
+    except Exception as e:
+        print(f"[purple] ... An unexpected error occurred: {e}")
+        raise typer.Exit(code=1) 
+
+async def get_aembeddings(
+    text: str, 
+    model: str,
+    api_key: str = None,
+    api_base: str = None
+    ):
+    """
+    Async version of get_embeddings using litellm.aembed.
+    
+    Parameters:
+    - text: The text to embed
+    - model: The embedding model (e.g., 'openai/text-embedding-ada-002',
+            'huggingface/...')
+    - api_base: Optional API base URL for custom endpoints
+    
+    Returns:
+    A dictionary containing the embeddings.
+    """
+    if not api_base or api_key:
+        model, api_base, api_key = get_provider_config(model)
+    
+    try:
+        response = await aembedding(
             input=text,
             model=model,
             api_key=api_key,

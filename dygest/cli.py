@@ -1,5 +1,6 @@
 import typer
 import json
+import asyncio
 from typing import Optional
 from pathlib import Path
 from rich import print
@@ -8,7 +9,8 @@ from dygest.output_utils import ExportFormats
 
 app = typer.Typer(
     no_args_is_help=True,
-    help='DYGEST: Document Insights Generator 🌞'
+    help='DYGEST: Document Insights Generator 🌞',
+    add_completion=False
 )
 
 @app.command("config", no_args_is_help=True)
@@ -81,21 +83,47 @@ def configure(
     """
     Configure LLMs, Embeddings and Named Entity Recognition. (Config file: .env)
     """
-    from dygest.config import print_config, ENV_FILE, set_key
+    from dygest.config import print_config, ENV_FILE, set_key, validate_model_name
     from dygest.ner_utils import NERlanguages
     
     if view_config:
         print_config()
         return
     
-    # Update individual config values if provided
     if light_model is not None:
+        if not validate_model_name(light_model):
+            typer.secho(
+                f"Invalid light model name format: '{light_model}'\n"
+                "Model name must be in one of these formats:\n"
+                "- 'provider/model' (e.g. 'ollama/qwen2.5:latest')\n"
+                "- 'openai/provider/model' (e.g. 'openai/exampleprovider/qwen2.5:latest')",
+                fg=typer.colors.RED
+            )
+            raise typer.Exit(code=1)
         set_key(ENV_FILE, 'LIGHT_MODEL', light_model)
     
     if expert_model is not None:
+        if not validate_model_name(expert_model):
+            typer.secho(
+                f"Invalid expert model name format: '{expert_model}'\n"
+                "Model name must be in one of these formats:\n"
+                "- 'provider/model' (e.g. 'ollama/qwen2.5:latest')\n"
+                "- 'openai/provider/model' (e.g. 'openai/exampleprovider/qwen2.5:latest')",
+                fg=typer.colors.RED
+            )
+            raise typer.Exit(code=1)
         set_key(ENV_FILE, 'EXPERT_MODEL', expert_model)
     
     if embedding_model is not None:
+        if not validate_model_name(embedding_model):
+            typer.secho(
+                f"Invalid embedding model name format: '{embedding_model}'\n"
+                "Model name must be in one of these formats:\n"
+                "- 'provider/model' (e.g. 'ollama/qwen2.5:latest')\n"
+                "- 'openai/provider/model' (e.g. 'openai/exampleprovider/qwen2.5:latest')",
+                fg=typer.colors.RED
+            )
+            raise typer.Exit(code=1)
         set_key(ENV_FILE, 'EMBEDDING_MODEL', embedding_model)
     
     if temperature is not None:
@@ -271,38 +299,88 @@ def main(
     # Create a list of all files to process
     files_to_process = utils.load_filepath(filepath, skip_html=skip_html)
         
-    # Process files
-    for file in files_to_process:
-        # Handle dygest JSON input files (and do not run LLM processing)
-        if file.suffix.lower() == '.json':
-            try:
-                with open(file, 'r', encoding='utf-8') as f:
-                    json_data = json.load(f)
-                    
-                # Validate JSON structure
-                if not utils.validate_json_input(json_data):
-                    typer.secho(
-                        f"... Error: The provided JSON does not follow the dygest JSON format.",
-                        fg=typer.colors.RED
+    async def process_files():
+        """
+        Run async file processing for JSON and TXT input.
+        """
+        for file in files_to_process:
+            # Handle dygest JSON input files (and do not run LLM processing)
+            if file.suffix.lower() == '.json':
+                try:
+                    with open(file, 'r', encoding='utf-8') as f:
+                        json_data = json.load(f)
+                        
+                    # Validate JSON structure
+                    if not utils.validate_json_input(json_data):
+                        typer.secho(
+                            f"... Error: The provided JSON does not follow the dygest JSON format.",
+                            fg=typer.colors.RED
+                        )
+                        raise typer.Exit(code=1)
+                        
+                    # Create processor with minimal required attributes
+                    proc = core.DygestProcessor(
+                        filepath=filepath,
+                        output_dir=utils.resolve_input_dir(Path(filepath), output_dir),
+                        light_model=json_data['light_model'],
+                        expert_model=json_data['expert_model'],
+                        embedding_model=get_config_value('EMBEDDING_MODEL'),
+                        temperature=get_config_value('TEMPERATURE', 0.0, float),
+                        sleep=get_config_value('SLEEP', 0.0, float),
+                        chunk_size=json_data['chunk_size'],
+                        add_toc='toc' in json_data,
+                        add_summaries='summary' in json_data,
+                        add_keywords='keywords' in json_data,
+                        add_ner=get_config_value('NER', False, bool),
+                        sim_threshold=sim_threshold,
+                        provided_language=json_data['language'],
+                        precise=get_config_value('NER_PRECISE', False, bool),
+                        verbose=verbose,
+                        export_metadata=export_metadata,
+                        export_format=export_format,
+                        html_template_path=chosen_template
                     )
-                    raise typer.Exit(code=1)
                     
-                # Create processor with minimal required attributes
+                    # Set the data from JSON
+                    proc.filename = json_data['filename']
+                    proc.output_filepath = Path(json_data['output_filepath'])
+                    proc.text = '\n'.join(chunk['text'] for chunk in json_data['chunks'].values())
+                    proc.chunks = json_data['chunks']
+                    proc.token_count = json_data['token_count']
+                    proc.language_ISO = json_data['language']
+                    proc.language_string = translations.LANGUAGES.get(json_data['language']).title()
+                    proc.sentence_offsets = json_data['sentence_offsets']
+                    
+                    if 'summary' in json_data:
+                        proc.summaries = json_data['summary']
+                    if 'keywords' in json_data:
+                        proc.keywords = json_data['keywords']
+                    if 'toc' in json_data:
+                        proc.toc = json_data['toc']
+                    
+                except json.JSONDecodeError as e:
+                    print(f"[purple]... Error: Invalid JSON file: {e}")
+                    continue
+                except Exception as e:
+                    print(f"[purple]... Error processing JSON file: {e}")
+                    continue
+            else:
+                # Regular file processing
                 proc = core.DygestProcessor(
                     filepath=filepath,
                     output_dir=utils.resolve_input_dir(Path(filepath), output_dir),
-                    light_model=json_data['light_model'],
-                    expert_model=json_data['expert_model'],
+                    light_model=get_config_value('LIGHT_MODEL'),
+                    expert_model=get_config_value('EXPERT_MODEL'),
                     embedding_model=get_config_value('EMBEDDING_MODEL'),
                     temperature=get_config_value('TEMPERATURE', 0.0, float),
                     sleep=get_config_value('SLEEP', 0.0, float),
-                    chunk_size=json_data['chunk_size'],
-                    add_toc='toc' in json_data,
-                    add_summaries='summary' in json_data,
-                    add_keywords='keywords' in json_data,
+                    chunk_size=get_config_value('CHUNK_SIZE', 0, int),
+                    add_toc=toc,
+                    add_summaries=summarize,
+                    add_keywords=keywords,
                     add_ner=get_config_value('NER', False, bool),
                     sim_threshold=sim_threshold,
-                    provided_language=json_data['language'],
+                    provided_language=get_config_value('NER_LANGUAGE', NERlanguages.AUTO),
                     precise=get_config_value('NER_PRECISE', False, bool),
                     verbose=verbose,
                     export_metadata=export_metadata,
@@ -310,82 +388,43 @@ def main(
                     html_template_path=chosen_template
                 )
                 
-                # Set the data from JSON
-                proc.filename = json_data['filename']
-                proc.output_filepath = Path(json_data['output_filepath'])
-                proc.text = '\n'.join(chunk['text'] for chunk in json_data['chunks'].values())
-                proc.chunks = json_data['chunks']
-                proc.token_count = json_data['token_count']
-                proc.language_ISO = json_data['language']
-                proc.language_string = translations.LANGUAGES.get(json_data['language']).title()
-                proc.sentence_offsets = json_data['sentence_offsets']
+                # Process file
+                await proc.process_file(file)
+
+            # Write output
+            try:
+                if file.suffix.lower() != '.json':
+                    formats_to_export = (
+                        [ExportFormats.CSV, ExportFormats.JSON, ExportFormats.HTML]
+                        if proc.export_format == ExportFormats.ALL
+                        else [proc.export_format, ExportFormats.JSON]
+                    )
+                else:
+                    formats_to_export = (
+                        [ExportFormats.CSV, ExportFormats.HTML]
+                        if proc.export_format == ExportFormats.ALL
+                        else [proc.export_format]
+                    )
                 
-                if 'summary' in json_data:
-                    proc.summaries = json_data['summary']
-                if 'keywords' in json_data:
-                    proc.keywords = json_data['keywords']
-                if 'toc' in json_data:
-                    proc.toc = json_data['toc']
+                for format in formats_to_export:
+                    proc.export_format = format
+                    writer = output_utils.get_writer(proc)
+                    writer.write()
                 
-            except json.JSONDecodeError as e:
-                print(f"[purple]... Error: Invalid JSON file: {e}")
-                continue
+                print('[blue][bold]... DONE')
+
+            except ValueError as ve:
+                print(f'... {ve}')
             except Exception as e:
-                print(f"[purple]... Error processing JSON file: {e}")
-                continue
-        else:
-            # Regular file processing
-            proc = core.DygestProcessor(
-                filepath=filepath,
-                output_dir=utils.resolve_input_dir(Path(filepath), output_dir),
-                light_model=get_config_value('LIGHT_MODEL'),
-                expert_model=get_config_value('EXPERT_MODEL'),
-                embedding_model=get_config_value('EMBEDDING_MODEL'),
-                temperature=get_config_value('TEMPERATURE', 0.0, float),
-                sleep=get_config_value('SLEEP', 0.0, float),
-                chunk_size=get_config_value('CHUNK_SIZE', 0, int),
-                add_toc=toc,
-                add_summaries=summarize,
-                add_keywords=keywords,
-                add_ner=get_config_value('NER', False, bool),
-                sim_threshold=sim_threshold,
-                provided_language=get_config_value('NER_LANGUAGE', NERlanguages.AUTO),
-                precise=get_config_value('NER_PRECISE', False, bool),
-                verbose=verbose,
-                export_metadata=export_metadata,
-                export_format=export_format,
-                html_template_path=chosen_template
-            )
-            
-            # Process file
-            proc.process_file(file)
+                print(f'... An unexpected error occurred: {e}')
 
-        # Write output
-        try:
-            if file.suffix.lower() != '.json':
-                formats_to_export = (
-                    [ExportFormats.CSV, ExportFormats.JSON, ExportFormats.HTML]
-                    if proc.export_format == ExportFormats.ALL
-                    else [proc.export_format, ExportFormats.JSON]
-                )
-            else:
-                formats_to_export = (
-                    [ExportFormats.CSV, ExportFormats.HTML]
-                    if proc.export_format == ExportFormats.ALL
-                    else [proc.export_format]
-                )
-            
-            for format in formats_to_export:
-                proc.export_format = format
-                writer = output_utils.get_writer(proc)
-                writer.write()
-            
-            print('[blue][bold]... DONE')
-
-        except ValueError as ve:
-            print(f'... {ve}')
-        except Exception as e:
-            print(f'... An unexpected error occurred: {e}')
+    # Run async processing
+    asyncio.run(process_files())
 
 if __name__ == '__main__':
-    app()
+    try:
+        app()
+    except KeyboardInterrupt:
+        print("\n... Operation cancelled by user")
+    except Exception as e:
+        print(f"\n... An error occurred: {e}")
